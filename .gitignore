@@ -1,0 +1,22 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.key
+node_modules/
+dist/
+build/
+coverage/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# Java / PHP
+.gradle/
+services/*/build/
+services/*/vendor/
+services/*/storage/*.key
+.phpunit.result.cache
