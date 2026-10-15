@@ -1,0 +1,6 @@
+*
+!services/media-service
+**/node_modules
+**/dist
+**/.env
+**/coverage
