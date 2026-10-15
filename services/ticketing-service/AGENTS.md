@@ -15,90 +15,85 @@ TypeScript · NestJS 11 · Node 24 · DynamoDB (`bandada-ticketing`; DynamoDB Lo
 `@aws-sdk/client-dynamodb` + `lib-dynamodb` · RabbitMQ (`@bandada/messaging-ts`) · `@bandada/*` ·
 Jest/Vitest + Testcontainers (DynamoDB Local, RabbitMQ) · dependency-cruiser.
 
-## Arquitectura: Clean Architecture
+## Arquitectura: Clean Architecture (implementada)
 
 ```
 src/
-├── entities/            ticket.entity.ts, ticket-status.ts, qr-payload.ts (VO), errors/
-├── use-cases/           ports/ (ticket.repository, qr-signer, event-publisher, clock, id-generator,
-│                        organizer-directory), issue-ticket/, void-ticket/, validate-ticket/,
-│                        list-my-tickets/, get-ticket/
-├── interface-adapters/  controllers/{http/tickets.controller.ts, messaging/ticketing-commands.consumer.ts},
-│                        presenters/, gateways/{dynamo/dynamo-ticket.repository.ts, dynamo-outbox.publisher.ts,
-│                        crypto/hmac-qr-signer.gateway.ts, http/events-organizer.gateway.ts}
-└── frameworks-drivers/  main.ts, modules/, config/, messaging/ (relay del outbox), observability/
-locales/{es,en}/errors.json   test/
+├── entities/            ticket.entity.ts, ticket-status.ts, qr-claims.ts, validation-window.policy.ts, errors/domain-errors.ts
+├── use-cases/           messages.ts (mensajes de respuesta), ports/{ticket.repository,qr-signer,event-publisher,clock,
+│                        id-generator,transaction}.ts, issue-ticket/, void-ticket/, validate-ticket/, list-my-tickets/,
+│                        get-ticket/, get-signing-keys/
+├── interface-adapters/  controllers/http/{tickets.controller,problem.filter,http-problem}.ts,
+│                        controllers/messaging/ticketing-commands.consumer.ts,
+│                        presenters/{ticket,problem}.presenter.ts + problem-messages.ts (es/en),
+│                        gateways/dynamo/{dynamo-ticket.repository,dynamo-outbox.publisher}.ts, gateways/crypto/jose-qr-signer.gateway.ts
+└── frameworks-drivers/  main.ts, bootstrap.ts, config/app-config.ts, modules/app.module.ts, health/health.controller.ts
+test/{unit,integration,support}   .dependency-cruiser.cjs (pnpm arch)
 ```
 
-## Comandos (propuestos)
+`entities` y `use-cases` no importan frameworks (ni `@bandada/*`); el `TransactionContext` es un handle opaco que el inbox
+entrega al caso de uso y que el repositorio traduce a `DynamoTransaction`. Los mensajes de error localizados viven en
+`problem-messages.ts` (no hay carpeta `locales/`).
+
+## Comandos
+
+Proyecto independiente (sin workspace). Ver `README.md`.
 
 ```bash
-pnpm --filter ticketing-service dev        # :7006
-pnpm --filter ticketing-service consumer   # consumidor de comandos (o mismo proceso, según infra)
-pnpm --filter ticketing-service test | test:int | test:e2e | lint | typecheck | arch | build
+corepack pnpm dev | build | start | test | test:int | lint | typecheck | arch
+docker build --build-context shared=../bandadau-shared -f services/ticketing-service/Dockerfile -t bandada/ticketing-service:local .   # desde bandadau-backend
 ```
 
-## Variables de entorno (`.env.example`)
+## Variables de entorno (`.env.example` completo)
 
-```
-PORT=7006
-DYNAMODB_ENDPOINT=http://localhost:8000
-AWS_REGION=us-east-1
-TICKETING_TABLE=bandada-ticketing
-IDEMPOTENCY_TABLE=bandada-idempotency
-RABBITMQ_URL=amqp://bandada:bandada@localhost:5672
-JWKS_URL=http://localhost:7001/.well-known/jwks.json
-JWT_ISSUER=http://api.bandada.localhost
-EVENTS_SERVICE_URL=http://localhost:7004
-SERVICE_CLIENT_ID=ticketing-service
-SERVICE_CLIENT_SECRET=change-me
-QR_SIGNING_KEY_PATH=/run/secrets/qr-es256.pem   # PEM P-256 (ES256); generar con `make keys`
-QR_SIGNING_KID=tk-2026-10
-QR_KEY_ID=dev-1
-CHAOS_TICKETING_FAIL=false
-DEFAULT_LOCALE=es
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-OTEL_SERVICE_NAME=ticketing-service
-```
+`PORT`, `NODE_ENV`, `DYNAMODB_ENDPOINT`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `TICKETING_TABLE`,
+`IDEMPOTENCY_TABLE`, `RABBITMQ_URL`, `JWKS_URL`, `JWT_ISSUER`, `CORS_ORIGINS`, `QR_SIGNING_KEY_PATH`, `QR_SIGNING_KID`
+(header `kid` del QR), `QR_PREVIOUS_JWKS_PATH` (claves públicas rotadas, opcional), `CHAOS_TICKETING_FAIL` (se lee al arrancar),
+`STRICT_ORGANIZER_CHECK`, `VALIDATION_OPENS_BEFORE_MINUTES` (120), `VALIDATION_DEFAULT_DURATION_MINUTES` (720),
+`OUTBOX_RELAY_INTERVAL_MS` (500), `TICKETING_COMMANDS_QUEUE` (solo pruebas). `QR_KEY_ID`, `EVENTS_SERVICE_URL`,
+`SERVICE_CLIENT_ID/SECRET` del compose no se usan (no se llama a events-service: la autorización sale del comando).
 
-## Puertos y rutas
+## Puertos, rutas, contrato
 
-Dev **7006**. Público `/api/v1/tickets/**`. Sin endpoints internos por ahora.
-
-## Contratos
-
-`bandadau-docs/contracts/openapi/ticketing-service.yaml`: `listMyTickets`, `getTicket` (incluye `qrPayload`),
-`validateTicket` ♻️ (rol ORGANIZER **del evento**).
+Dev **7006**. `/api/v1/tickets/me` (listMyTickets), `/api/v1/tickets/signing-keys` (getTicketSigningKeys, JWKS ES256,
+`Cache-Control: public, max-age=3600`), `/api/v1/tickets/{id}` (getTicket con `qrPayload`; dueño o ADMIN),
+`POST /api/v1/tickets/validate` (♻️ `@Idempotent()`, `ORGANIZER`/`ADMIN`), `/health/live`, `/health/ready` (DescribeTable).
+Sin endpoints internos.
 
 ## Mensajería
 
-- **Consume** (`ticketing-service.commands`, `bandada.ticketing.cmd.#`):
-  `bandada.ticketing.cmd.issue-ticket.v1`, `bandada.ticketing.cmd.void-ticket.v1`.
-- **Publica**: `bandada.ticketing.ticket-issued.v1`, `…ticket-issue-failed.v1`, `…ticket-voided.v1`,
-  `bandada.ticketing.ticket.used.v1`.
+- **Consume** cola `ticketing-service.commands` (creada por infra; el servicio solo la verifica): `bandada.ticketing.cmd.issue-ticket.v1`,
+  `bandada.ticketing.cmd.void-ticket.v1`. Reintentos 5 s/30 s/5 min y DLQ los gestiona `@bandada/messaging-ts`.
+- **Publica** (outbox + relay, `bandada.events`): `ticket-issued`, `ticket-issue-failed` (`CHAOS_INJECTED`, `ALREADY_VOIDED`),
+  `ticket-voided` (`ticketId: null` si no había ticket), `ticket-void-failed` (`TICKET_ALREADY_USED`), `ticket.used`.
 
 ## Datos (DynamoDB `bandada-ticketing`)
 
-`pk = TICKET#<ticketId>` / `sk = META`; GSI1 `USER#<userId>` / `EVENT#<eventId>`;
-GSI2 `REG#<registrationId>`. Inbox como ítem `pk = INBOX#<messageId>` / `sk = META` (TTL 14 días) con
-`attribute_not_exists(pk)` y outbox como ítems `pk = OUTBOX#<id>` escritos en el mismo
-`TransactWriteItems` que el ticket (propuesta; alternativa: DynamoDB Streams → relay).
+| Ítem | pk / sk | Notas |
+|---|---|---|
+| Ticket | `TICKET#<id>` / `META` | `gsi1pk=USER#<userId>`, `gsi1sk=STARTS#<eventStartsAt ISO>#<id>` (orden por fecha del evento), `gsi2pk=REG#<registrationId>`, `gsi2sk=TICKET#<id>`; `organizerId`, `staffUserIds` |
+| Centinela de inscripción | `REG#<registrationId>` / `LOCK` | `state` `ISSUED` + `ticketId`, o `VOIDED` (con `ticketId` nulo = tombstone de void previo) |
+| Inbox | `INBOX#<messageId>` / `META` | TTL `expiresAt` (14 días), en la misma `TransactWriteItems` |
+| Outbox | `OUTBOX#<id>` / `META` | `gsi1pk=OUTBOX#PENDING`; relay en el mismo proceso |
+
+Emisión: `TransactWriteItems` = inbox + centinela (`attribute_not_exists`) + ticket + outbox. Validación: update condicional
+`status = ISSUED AND eventId = :eid` + outbox; ante `TransactionConflict`/condición perdida se relee y se decide (máx. 3 intentos).
 
 ## Reglas específicas y gotchas
 
-- **Un ticket por `registrationId`**: ítem centinela `pk = REG#<registrationId>` con condición
-  `attribute_not_exists` dentro de la transacción; reemitir devuelve el ticket existente y publica
-  `ticket-issued` de nuevo (respuesta idempotente).
-- `void-ticket` sobre ticket inexistente → igual responde `ticket-voided` (compensación idempotente).
-- Estados finales: `USED` y `VOIDED` no cambian (invariante 5); validar dos veces → `409 TICKET_ALREADY_USED`.
-- QR = **JWS compacto ES256** (`kid` en el header; payload `tid`, `eid`, `uid`, `iat`), verificable offline
-  por el portero con la clave pública. Nunca datos personales en el QR (ver UC-14).
-- Validación: el usuario debe ser organizador del evento (consulta `events-service` con token de servicio,
-  caché corta) — o usar claim si se añade al contrato.
-- `CHAOS_TICKETING_FAIL=true` hace fallar **toda** emisión con `ticket-issue-failed` (demo C1). Nunca activo en prod.
-- `TransactWriteItems` máximo de ítems y tamaño: verificar límites actuales de DynamoDB.
-- Problem Details localizados por `Accept-Language`, `code` estable (`TICKET_NOT_FOUND`, `INVALID_QR_SIGNATURE`, `TICKET_EVENT_MISMATCH`,
-  `TICKET_ALREADY_USED`, `TICKET_VOIDED`, `NOT_EVENT_ORGANIZER`).
+- Un ticket por `registrationId`; reemitir (mensaje nuevo, misma inscripción) responde de nuevo `ticket-issued` con el mismo ticket.
+- `void` antes de `issue` deja tombstone → el `issue` tardío responde `ticket-issue-failed` `ALREADY_VOIDED`.
+- `USED` y `VOIDED` son finales; `void-ticket` sobre `USED` → `ticket-void-failed`.
+- QR = JWS compacto ES256 (`{alg, kid}`; claims `tid, eid, rid, sub, iat` con `iat` = emisión, así el QR es estable). Clave PEM PKCS#8 en
+  `QR_SIGNING_KEY_PATH`; JWKS público = clave activa + `QR_PREVIOUS_JWKS_PATH`. Nunca datos personales en el QR.
+- Validación: `ORGANIZER` del evento (`organizerId`/`staffUserIds` copiados del comando) o `ADMIN`; ventana `startsAt − 2 h … fin`
+  (si no hay fin, `startsAt + 12 h`); orden de errores: firma (422) → evento (422) → 404 → 403 → 409 (usado/anulado) → ventana (422).
+- **Divergencia de contrato**: el comando `issue-ticket` del AsyncAPI no trae `organizerId`, `staffUserIds` ni `eventEndsAt` (PROPUESTA 3 de UC-14,
+  y events-service todavía no los envía). Se aceptan como opcionales; si faltan, cualquier `ORGANIZER` puede validar salvo `STRICT_ORGANIZER_CHECK=true`.
+- `VALIDATION_WINDOW_CLOSED` no está en `@bandada/i18n/errors` ni en el OpenAPI (sí en UC-14/PROPUESTA 5): el texto es local.
+- Un `ConcurrentTransitionError` dentro del consumidor se reintenta por la cola de espera (5 s), no se pierde.
+- `CHAOS_TICKETING_FAIL=true` hace fallar **toda** emisión con `ticket-issue-failed`. Nunca en producción.
+- Jest transpila con SWC porque `jose` 6 es solo ESM (`transformIgnorePatterns` en `jest.base.cjs`).
 
 ## Casos de uso
 
