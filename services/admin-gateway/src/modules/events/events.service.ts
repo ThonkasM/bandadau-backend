@@ -14,7 +14,7 @@ export class EventsService {
       startsFrom: f.from ?? undefined,
       startsTo: f.to ?? undefined,
       status: f.status ? [f.status] : undefined,
-      limit: 100,
+      limit: 50,
     });
     const q = f.query?.toLowerCase();
     return page.items

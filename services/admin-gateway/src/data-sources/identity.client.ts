@@ -28,7 +28,7 @@ export class IdentityClient {
     const all: IdentityUniversity[] = [];
     let cursor: string | undefined;
     do {
-      const page = await this.http.request<Page<IdentityUniversity>>('GET', '/api/v1/universities', { ...opts(ctx), bearer: undefined, query: { cursor, limit: 100 } }).catch((e) => {
+      const page = await this.http.request<Page<IdentityUniversity>>('GET', '/api/v1/universities', { ...opts(ctx), bearer: undefined, query: { cursor, limit: 50 } }).catch((e) => {
         throw e;
       });
       all.push(...page.items);

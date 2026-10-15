@@ -32,8 +32,8 @@ export function createLoaders(ds: DataSources, call: CallContext, options: { cac
   return {
     users: loader<IdentityUser | null>(async (ids) => {
       const found = new Map<string, IdentityUser>();
-      for (let i = 0; i < ids.length; i += 100) {
-        const page = await ds.identity.searchUsers(call, { ids: ids.slice(i, i + 100), limit: 100 });
+      for (let i = 0; i < ids.length; i += 50) {
+        const page = await ds.identity.searchUsers(call, { ids: ids.slice(i, i + 50), limit: 50 });
         for (const user of page.items) found.set(user.id, user);
       }
       return ids.map((id) => found.get(id) ?? null);
@@ -44,7 +44,7 @@ export function createLoaders(ds: DataSources, call: CallContext, options: { cac
       return ids.map((id) => found.get(id) ?? null);
     }),
     sagas: loader<SagaDto[]>(async (keys) => {
-      const recent = (await ds.events.listSagas(call, { limit: 100 })).items;
+      const recent = (await ds.events.listSagas(call, { limit: 50 })).items;
       return keys.map(() => recent);
     }),
     universities: loader<IdentityUniversity | null>(async (ids) => {

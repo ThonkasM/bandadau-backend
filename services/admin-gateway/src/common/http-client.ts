@@ -3,7 +3,7 @@ import type { ServiceTokenProvider } from '@bandada/auth-ts';
 import { type Problem, ServiceHttpError } from './errors';
 
 export interface RequestOptions {
-  query?: Record<string, string | number | boolean | string[] | undefined>;
+  query?: Record<string, string | number | boolean | string[] | null | undefined>;
   body?: unknown;
   /** Human on whose behalf the gateway acts (`X-Actor-Id`). */
   actorId?: string;
@@ -48,7 +48,7 @@ export class ServiceHttp {
   private async once<T>(method: string, path: string, opts: RequestOptions): Promise<T> {
     const url = new URL(this.options.baseUrl + path);
     for (const [key, value] of Object.entries(opts.query ?? {})) {
-      if (value === undefined) continue;
+      if (value === undefined || value === null || value === '') continue;
       url.searchParams.set(key, Array.isArray(value) ? value.join(',') : String(value));
     }
     const headers: Record<string, string> = opts.bearer

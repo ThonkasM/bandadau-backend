@@ -60,8 +60,8 @@ export class ModerationService {
   /** Current pending count (used by the subscription payload). */
   async pendingCount(ctx: GatewayContext): Promise<number> {
     const [m, p] = await Promise.all([
-      this.ds.media.listFlagged(ctx.call, { limit: 100 }).then((r) => r.items.length),
-      this.ds.social.listPostsByStatus(ctx.call, { limit: 100 }).then((r) => r.items.length),
+      this.ds.media.listFlagged(ctx.call, { limit: 50 }).then((r) => r.items.length),
+      this.ds.social.listPostsByStatus(ctx.call, { limit: 50 }).then((r) => r.items.length),
     ]);
     return m + p;
   }

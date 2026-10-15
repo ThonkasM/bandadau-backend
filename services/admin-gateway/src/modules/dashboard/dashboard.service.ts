@@ -80,7 +80,7 @@ export class DashboardService {
     let count = 0;
     let cursor: string | undefined;
     for (let page = 0; page < 5; page++) {
-      const res = await this.ds.identity.searchUsers(ctx.call, { cursor, limit: 100 });
+      const res = await this.ds.identity.searchUsers(ctx.call, { cursor, limit: 50 });
       count += res.items.filter((u) => u.createdAt >= from && u.createdAt <= to).length;
       if (!res.nextCursor) break;
       cursor = res.nextCursor;

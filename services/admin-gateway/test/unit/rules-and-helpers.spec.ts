@@ -90,7 +90,7 @@ describe('errors and http client', () => {
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     }) as unknown as typeof fetch;
     const http = new ServiceHttp({ name: 'events-service', baseUrl: 'http://e', timeoutMs: 500, fetch: fakeFetch, tokens: { authHeaders: async (x) => ({ Authorization: 'Bearer svc', ...(x?.actorId ? { 'X-Actor-Id': x.actorId } : {}) }), invalidate: () => undefined } });
-    await expect(http.request('GET', '/x', { actorId: 'u1', locale: 'en', query: { a: 1, b: undefined, c: ['x', 'y'] } })).resolves.toEqual({ ok: true });
+    await expect(http.request('GET', '/x', { actorId: 'u1', locale: 'en', query: { a: 1, b: undefined, n: null, e: '', c: ['x', 'y'] } })).resolves.toEqual({ ok: true });
     expect(calls).toHaveLength(2);
     expect(calls[1]?.url).toBe('http://e/x?a=1&c=x%2Cy');
     expect(calls[1]?.headers).toMatchObject({ Authorization: 'Bearer svc', 'X-Actor-Id': 'u1', 'Accept-Language': 'en' });
