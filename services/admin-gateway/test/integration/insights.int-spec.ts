@@ -32,13 +32,15 @@ beforeEach(() => h.resetMocks());
 describe('insights queries (phase 2)', () => {
   it('reports: service-token list with Relay pagination, requestedBy resolved for users and null for system requesters', async () => {
     h.mock('GET', '/insights/internal/v1/reports', () => ({ body: { items: [report(U(1)), report(U(2), { requestedBy: 'system:n8n', title: null })], nextCursor: 'C2' } }));
+    h.mock('GET', `/insights/internal/v1/reports/${U(1)}`, () => ({ body: report(U(1), { markdown: '## Completo' }) }));
+    h.mock('GET', `/insights/internal/v1/reports/${U(2)}`, () => ({ body: report(U(2), { requestedBy: 'system:n8n', title: null, markdown: '## Otro' }) }));
     h.mock('GET', '/identity/internal/v1/users', (c) => ({ body: { items: (c.query.get('ids') ?? '').split(',').filter(Boolean).map((id) => user(id, { roles: ['ADMIN'] })), nextCursor: null } }));
     h.mock('GET', `/social/internal/v1/profiles/${ids.admin}`, () => ({ body: { userId: ids.admin, displayName: 'Admin Ana' } }));
     const res = await h.gql('query($after:String){ reports(first: 2, after: $after, status: READY) { edges { node { id title status locale requestedBy { id } markdown audioUrl } } pageInfo { hasNextPage endCursor } } }', { token: admin, variables: { after: 'C1' } });
     expect(res.body.errors).toBeUndefined();
     const { edges, pageInfo } = res.body.data.reports;
     expect(edges.map((e: { node: { requestedBy: { id: string } | null } }) => e.node.requestedBy?.id ?? null)).toEqual([ids.admin, null]);
-    expect(edges[0].node).toMatchObject({ id: U(1), status: 'READY', locale: 'es', markdown: null, audioUrl: null });
+    expect(edges[0].node).toMatchObject({ id: U(1), status: 'READY', locale: 'es', markdown: '## Completo', audioUrl: null });
     expect(pageInfo).toEqual({ hasNextPage: true, endCursor: 'C2' });
     const call = h.callsTo('/insights/internal/v1/reports')[0]!;
     expect(call.headers.authorization).toBe('Bearer svc-token');

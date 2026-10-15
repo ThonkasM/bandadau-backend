@@ -6,6 +6,17 @@ type Ctx = GatewayContext;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function insightsResolvers(service: InsightsService) {
+  // `reports` lists summaries (no markdown/dataset/chart/audio): content fields are fetched once per report when selected
+  const fulls = new WeakMap<InsightsReportDto, Promise<InsightsReportDto>>();
+  const full = (r: InsightsReportDto, ctx: Ctx): Promise<InsightsReportDto> => {
+    if (r.markdown !== undefined || r.status === 'PENDING' || r.status === 'RUNNING') return Promise.resolve(r);
+    let p = fulls.get(r);
+    if (!p) {
+      p = service.report(ctx, r.id).then((f) => f ?? r);
+      fulls.set(r, p);
+    }
+    return p;
+  };
   return {
     Query: {
       reports: (_: unknown, args: never, ctx: Ctx) => service.reports(ctx, args),
@@ -22,11 +33,11 @@ export function insightsResolvers(service: InsightsService) {
       // `system:<client>` requesters (n8n, monitoring) are not users
       requestedBy: (r: InsightsReportDto, _: unknown, ctx: Ctx) => (UUID.test(r.requestedBy) ? ctx.loaders.users.load(r.requestedBy) : null),
       agentRun: (r: InsightsReportDto, _: unknown, ctx: Ctx) => (r.agentRunId ? service.agentRun(ctx, r.agentRunId) : null),
-      markdown: (r: InsightsReportDto) => r.markdown ?? null,
-      dataset: (r: InsightsReportDto) => r.dataset ?? null,
-      chart: (r: InsightsReportDto) => r.chart ?? null,
-      audioUrl: (r: InsightsReportDto) => r.audioUrl ?? null,
-      audioDurationSeconds: (r: InsightsReportDto) => r.audioDurationSeconds ?? null,
+      markdown: async (r: InsightsReportDto, _: unknown, ctx: Ctx) => (await full(r, ctx)).markdown ?? null,
+      dataset: async (r: InsightsReportDto, _: unknown, ctx: Ctx) => (await full(r, ctx)).dataset ?? null,
+      chart: async (r: InsightsReportDto, _: unknown, ctx: Ctx) => (await full(r, ctx)).chart ?? null,
+      audioUrl: async (r: InsightsReportDto, _: unknown, ctx: Ctx) => (await full(r, ctx)).audioUrl ?? null,
+      audioDurationSeconds: async (r: InsightsReportDto, _: unknown, ctx: Ctx) => (await full(r, ctx)).audioDurationSeconds ?? null,
       failureReason: (r: InsightsReportDto) => r.failureReason ?? null,
     },
     Alert: {
