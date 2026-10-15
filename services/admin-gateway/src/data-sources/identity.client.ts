@@ -40,4 +40,9 @@ export class IdentityClient {
   createUniversity(ctx: CallContext, input: { name: string; allowedDomains: string[] }) {
     return this.http.request<IdentityUniversity>('POST', '/internal/v1/universities', { ...opts(ctx), body: input });
   }
+
+  updateUniversity(ctx: CallContext, id: string, patch: { name?: string | null; allowedDomains?: string[] | null; enabled?: boolean | null }) {
+    const body = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== null && v !== undefined));
+    return this.http.request<IdentityUniversity>('PATCH', `/internal/v1/universities/${id}`, { ...opts(ctx), body });
+  }
 }

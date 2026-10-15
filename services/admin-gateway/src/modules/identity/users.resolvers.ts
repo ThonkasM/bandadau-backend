@@ -15,6 +15,7 @@ export function usersResolvers(service: UsersService) {
       suspendUser: (_: unknown, a: { input: { userId: string; reason: string } }, ctx: GatewayContext) => service.suspend(ctx, a.input),
       reactivateUser: (_: unknown, a: { input: { userId: string } }, ctx: GatewayContext) => service.reactivate(ctx, a.input),
       createUniversity: (_: unknown, a: { input: { name: string; allowedDomains: string[] } }, ctx: GatewayContext) => service.createUniversity(ctx, a.input),
+      updateUniversity: (_: unknown, a: { input: { id: string; name?: string | null; allowedDomains?: string[] | null; enabled?: boolean | null } }, ctx: GatewayContext) => service.updateUniversity(ctx, a.input),
     },
     User: {
       university: (u: IdentityUser, _: unknown, ctx: GatewayContext) => (u.universityId ? ctx.loaders.universities.load(u.universityId) : null),

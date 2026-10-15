@@ -68,4 +68,13 @@ export class UsersService {
       return { university: null, errors: toUserErrors(e) };
     }
   }
+
+  async updateUniversity(ctx: GatewayContext, input: { id: string; name?: string | null; allowedDomains?: string[] | null; enabled?: boolean | null }) {
+    try {
+      const { id, ...patch } = input;
+      return { university: await this.ds.identity.updateUniversity(ctx.call, id, patch), errors: [] };
+    } catch (e) {
+      return { university: null, errors: toUserErrors(e) };
+    }
+  }
 }

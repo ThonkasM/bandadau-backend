@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- standalone CommonJS script run with plain node */
 // Manual check against the live infra: node test/live-flow.cjs (gateway on :17010 with JWKS_URL=http://host.docker.internal:19002/jwks.json)
 const http = require('node:http');
 (async () => {
