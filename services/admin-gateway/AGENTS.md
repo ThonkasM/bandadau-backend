@@ -16,96 +16,85 @@ TypeScript · NestJS 11 · Node 24 · Apollo Server 5 (integración NestJS: veri
 compatibilidad con Nest 11) · `graphql-ws` · DataLoader · RabbitMQ (solo para alimentar
 subscriptions) · `@bandada/auth-ts`, `@bandada/contracts-ts` · Jest/Vitest · dependency-cruiser.
 
-## Arquitectura: capas (resolvers → services → data sources)
+## Arquitectura: capas (implementada)
 
-No usa Clean: es un adaptador de agregación. Regla: **resolvers → services → data-sources**, nunca al revés.
+No usa Clean. Regla (`pnpm arch`): **resolvers → services → data-sources → common**, nunca al revés.
 
 ```
+schema/admin.graphql          copia EXACTA del contrato (bandadau-docs); `pnpm schema:sync [--check]` y prueba de igualdad
 src/
-├── main.ts  app.module.ts
-├── config/                 env.schema.ts
+├── main.ts  bootstrap.ts  app.module.ts       Nest solo para DI, ciclo de vida y /health; Apollo se monta antes de init()
+├── config/env.ts
+├── common/   errors.ts (ServiceHttpError, UserError, FEATURE_DISABLED…), http-client.ts (token de servicio, timeout, 1 reintento GET), relay.ts
+├── data-sources/   identity|social|media|events|wallet .client.ts, data-sources.ts, types.ts
 ├── graphql/
-│   ├── schema.ts           carga bandadau-docs/contracts/graphql/admin.graphql (schema-first)
-│   ├── directives/         auth.directive.ts (@auth(requires: [...]))
-│   ├── scalars/            DateTime, UUID
-│   ├── plugins/            depth-limit (7), complexity-limit, error-formatter (extensions.code), otel
-│   └── pubsub/             rabbit-pubsub.ts (alertRaised, moderationQueueChanged, reportReady)
-├── modules/<dominio>/      users, universities, moderation, events, sagas, wallet, insights, dashboard, health
-│   ├── <dominio>.resolver.ts
-│   ├── <dominio>.service.ts      (composición, mapeo a tipos GraphQL, paginación Relay)
-│   └── <dominio>.loaders.ts      (DataLoader por petición)
-├── data-sources/           identity.client.ts, social.client.ts, media.client.ts, events.client.ts,
-│                           wallet.client.ts, ticketing.client.ts, insights.client.ts
-│                           (HTTP con token de servicio, timeout, retry, circuit breaker)
-└── common/                 service-token.provider.ts, correlation.ts, relay-pagination.ts
-test/
+│   ├── schema.ts            makeExecutableSchema + @auth (mapSchema) + exige sesión en campos raíz
+│   ├── graphql-server.ts    Apollo Server 5 (express5) + graphql-ws en /graphql, contexto por petición, formatError, errores parciales
+│   ├── context.ts           DataLoaders por petición (users por `ids`, profiles, media urls, universities, sagas)
+│   ├── scalars.ts  validation-rules.ts (profundidad y complejidad)
+│   └── pubsub/rabbit-event-bus.ts   cola exclusiva auto-delete `admin-gateway.subscriptions.<instanceId>`
+└── modules/{identity,moderation,events,dashboard,health,disabled}/   *.service.ts + *.resolvers.ts (+ mappers/subscriptions)
+test/{unit,integration}
 ```
 
-## Comandos (propuestos)
+## Comandos
+
+Proyecto independiente (sin workspace). Ver `README.md`.
 
 ```bash
-pnpm --filter admin-gateway dev             # :7010 (/graphql HTTP + WS)
-pnpm --filter admin-gateway test | test:int | lint | typecheck | arch | build
-(cd ../bandadau-docs && make contracts-lint)  # incluye graphql-inspector sobre admin.graphql
+corepack pnpm dev | build | start | schema:sync | test | test:int | lint | typecheck | arch
+docker build --build-context shared=../bandadau-shared -f services/admin-gateway/Dockerfile -t bandada/admin-gateway:local .   # desde bandadau-backend
 ```
 
-## Variables de entorno (`.env.example`)
+## Variables de entorno (`.env.example` completo)
 
-```
-PORT=7010
-JWKS_URL=http://localhost:7001/.well-known/jwks.json
-JWT_ISSUER=http://api.bandada.localhost
-IDENTITY_URL=http://localhost:7001
-SOCIAL_SERVICE_URL=http://localhost:7002
-MEDIA_SERVICE_URL=http://localhost:7003
-EVENTS_SERVICE_URL=http://localhost:7004
-WALLET_SERVICE_URL=http://localhost:7005
-TICKETING_SERVICE_URL=http://localhost:7006
-INSIGHTS_SERVICE_URL=http://localhost:7008
-SERVICE_CLIENT_ID=admin-gateway
-SERVICE_CLIENT_SECRET=change-me
-RABBITMQ_URL=amqp://bandada:bandada@localhost:5672
-GRAPHQL_MAX_DEPTH=7
-GRAPHQL_MAX_COMPLEXITY=1000
-GRAPHQL_INTROSPECTION=true                 # false en producción
-HTTP_TIMEOUT_MS=3000
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-OTEL_SERVICE_NAME=admin-gateway
-```
+`PORT`, `NODE_ENV`, `JWKS_URL`, `JWT_ISSUER`, `JWT_AUDIENCE` (`bandada-admin`), `IDENTITY_URL`, `SOCIAL_SERVICE_URL`, `MEDIA_SERVICE_URL`,
+`EVENTS_SERVICE_URL`, `WALLET_SERVICE_URL`, `TICKETING_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`, `INSIGHTS_SERVICE_URL` (fase 2, no usado),
+`SERVICE_CLIENT_ID`, `SERVICE_CLIENT_SECRET`, `SERVICE_TOKEN_SCOPES` (`internal:read,internal:write`), `RABBITMQ_URL`,
+`RABBITMQ_MANAGEMENT_URL/USER/PASSWORD` (opcional, `serviceHealth.queues`; usuario `monitor`), `GRAPHQL_MAX_DEPTH` (7), `GRAPHQL_MAX_COMPLEXITY` (1000),
+`GRAPHQL_INTROSPECTION` y `GRAPHQL_LANDING_PAGE` (por defecto activos solo si `NODE_ENV != production`), `CORS_ORIGINS` (con credenciales),
+`HTTP_TIMEOUT_MS`, `DEFAULT_LOCALE`, `INSTANCE_ID`.
 
 ## Puertos y rutas
 
-Dev **7010**. `/graphql` (HTTP POST + WebSocket `graphql-ws`), `/health/live`, `/health/ready`.
+Dev **7010**. `/graphql` (POST + WebSocket `graphql-ws`; token en cabecera `Authorization` o en `connectionParams.Authorization`), `/health/live`,
+`/health/ready` (incluye estado del broker; no cae si RabbitMQ está caído, reconecta cada 5 s).
 
-## Contratos
+## Contratos y cómo se resuelve cada campo (fase 1)
 
-- Implementa `bandadau-docs/contracts/graphql/admin.graphql` (Query/Mutation/Subscription de D11, incluidos
-  `User.locale`, `User.theme`, `requestReport(question, locale)`).
-- Consume los OpenAPI `/internal` de los servicios (verificado con Pact como consumidor).
-
-## Mensajería
-
-- **Consume** (cola propia efímera/exclusiva por instancia, **añadir al catálogo vía ADR**):
-  `bandada.insights.alert.raised.v1`, `bandada.media.asset.flagged.v1`, `bandada.social.content.reported.v1`,
-  `bandada.insights.report.ready.v1` → subscriptions.
-- **Publica**: nada.
-
-## Datos
-
-Ninguno. Caché en memoria opcional (TTL corto) para `universities` y `serviceHealth`.
+| Campo | Origen |
+|---|---|
+| `me` | identity `GET /api/v1/users/me` con el **token del usuario** |
+| `users`, `user` | identity `GET /internal/v1/users` (`ids` para el DataLoader; `user(id)` = `ids=<id>`) |
+| `universities` | identity `GET /api/v1/universities` (público) |
+| `updateUserRoles`, `suspendUser`, `reactivateUser`, `createUniversity` | identity `/internal/v1` con `X-Actor-Id` |
+| `moderationQueue` | media `GET /internal/v1/media` (FLAGGED) + social `GET /internal/v1/posts` (HIDDEN); mezcla por antigüedad, cursor = offset |
+| `contentReports`, `resolveContentReport` | social `/internal/v1/reports` |
+| `moderateMedia` | media `POST /internal/v1/media/{id}/decision` |
+| `events`, `registrations`, `Event.registrations`, `sagas`, `retrySaga` | events `/internal/v1/**` |
+| `event(id)` | events `GET /api/v1/events/{id}` con el token del usuario |
+| `dashboard`, `walletStats` | social `stats/daily`, events `stats/registrations`, wallet `stats/credits`, identity (conteo `newUsers`), cola de moderación |
+| `serviceHealth` | `GET /health/ready` de identity, social, media, events, wallet, ticketing y notification + management API de RabbitMQ |
+| `moderationQueueChanged` | RabbitMQ: `media.asset.#`, `social.content.reported.v1`, `social.post.hidden.v1` |
+| Fase 2: `reports`, `report`, `alerts`, `agentRuns`, `requestReport`, `acknowledgeAlert`, `runMonitoringNow`, `createMcpToken`, `revokeMcpToken`, `alertRaised`, `reportReady` | error `extensions.code = FEATURE_DISABLED` |
 
 ## Reglas específicas y gotchas
 
-- Autorización por directiva `@auth(requires: [ADMIN])` / `[MODERATOR]` en el schema; además los servicios
-  validan el token de servicio. El `sub` del admin se propaga (cabecera `X-Acting-User`) para auditoría.
-- **Propagar `Accept-Language`** del panel a los servicios; errores GraphQL con `extensions.code` estable
-  (el `code` del Problem Details de origen) y mensaje localizado.
-- DataLoader **por petición** (nunca global) para evitar N+1 y fugas entre usuarios.
-- Paginación Relay (`Connection/Edge/PageInfo`) traduciendo el `nextCursor` de los servicios.
-- Fallo parcial de un servicio → `null` en ese campo + error en `errors[]` (no tumbar toda la query);
-  en `dashboard` marcar `degraded: true`.
-- Nunca acceder a bases de datos ni a RabbitMQ para *queries*; solo REST interno.
-- Introspección y playground deshabilitados en producción.
+- Errores: autenticación/autorización → `UNAUTHENTICATED`/`FORBIDDEN`; errores de negocio de mutaciones → `errors: [UserError]` con el `code` del Problem de origen;
+  fallo de un servicio en queries → error con `extensions.code` (el del Problem, o `SERVICE_UNAVAILABLE`); `dashboard` degrada a ceros + error parcial
+  (`extensions.degraded = true`) en vez de caer. `QUERY_TOO_DEEP` / `QUERY_TOO_COMPLEX` para los límites. Errores internos no filtran detalles.
+- Persisted queries desactivadas; introspección y landing page solo en dev; CSRF prevention activo.
+- Complejidad: cada campo cuesta 1 y un campo con `first`/`limit` multiplica a sus hijos (máx. 100). El límite 1000 admite p. ej. `users(first: 20)` con ~10 campos.
+- Cada petición WebSocket crea DataLoaders **sin caché** para no servir datos viejos durante una suscripción larga.
+- Mensajes de `UserError` y `Accept-Language`: se propaga la cabecera a los servicios; los textos vienen localizados del servicio de origen.
+- Jest transpila con SWC porque `jose` 6 es solo ESM.
+- **Divergencias de contrato** (reportar en bandadau-docs): (1) no existe `GET /internal/v1/users/{id}` ni filtro `ids` en el OpenAPI de identity, pero
+  identity-service ya implementa `ids` y se usa para el DataLoader; (2) `suspendUser.until` no tiene campo equivalente en `UpdateUserStatusRequest` → se ignora;
+  (3) `User.suspendedAt/suspensionReason` no vienen del servicio (solo se rellenan tras suspender en la misma petición); (4) no hay `GET` interno de evento ni de post:
+  `event(id)` usa la API pública con el token del usuario y `ContentReport.post` devuelve `null`; (5) `Registration.saga` se resuelve buscando entre las
+  100 SAGAs más recientes; (6) el AGENTS original hablaba de `X-Acting-User`: el contrato usa `X-Actor-Id`; (7) la cola `admin-gateway.subscriptions.<id>` no figura aún
+  en el catálogo (ADR pendiente) y el usuario RabbitMQ del gateway debe poder declararla; (8) los eventos de moderación no traen el contenido completo, así que el `item`
+  de la suscripción es mínimo (el cliente refresca con `moderationQueue`).
 
 ## Casos de uso
 

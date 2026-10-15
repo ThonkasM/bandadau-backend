@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.git
+services/*
+!services/admin-gateway
+services/admin-gateway/test
+services/admin-gateway/*.md

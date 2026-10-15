@@ -1,0 +1,10 @@
+# Applied when building with context = bandadau-backend (BuildKit reads <Dockerfile>.dockerignore).
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.git
+services/*
+!services/admin-gateway
+services/admin-gateway/test
+services/admin-gateway/*.md
