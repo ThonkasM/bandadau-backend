@@ -6,11 +6,11 @@ import type { PostOutput } from '../outputs';
 import type {
   Clock,
   EventPublisher,
+  GroupRepository,
   IdGenerator,
   MediaAssetViewRepository,
   MediaGateway,
   MembershipRepository,
-  GroupRepository,
   PostRepository,
   ProfileRepository,
   UnitOfWork,

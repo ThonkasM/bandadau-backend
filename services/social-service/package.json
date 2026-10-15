@@ -5,7 +5,9 @@
   "description": "Bandada U social-service: profiles, posts, feed, comments, reactions, follows, groups and reports (Clean Architecture, NestJS 11, MongoDB)",
   "license": "UNLICENSED",
   "packageManager": "pnpm@10.34.7",
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "build": "pnpm arch && tsc -p tsconfig.build.json",
     "start": "node dist/frameworks-drivers/main.js",
@@ -14,8 +16,8 @@
     "lint": "eslint src test",
     "arch": "depcruise src --config .dependency-cruiser.cjs",
     "test": "jest --selectProjects unit",
-    "test:int": "jest --selectProjects integration --runInBand",
-    "test:all": "jest --runInBand"
+    "test:int": "NODE_OPTIONS=--experimental-vm-modules jest --selectProjects integration --runInBand --forceExit",
+    "test:all": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand --forceExit"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1151.0",
@@ -45,6 +47,7 @@
     "dependency-cruiser": "^18.6.0",
     "eslint": "^9.39.5",
     "jest": "^30.5.2",
+    "jose": "^6.2.12",
     "supertest": "^7.3.1",
     "ts-jest": "^29.4.14",
     "typescript": "~5.9.3"

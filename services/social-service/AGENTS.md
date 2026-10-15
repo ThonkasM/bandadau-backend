@@ -1,115 +1,92 @@
 # AGENTS.md — social-service (S2)
 
-Lee primero el `AGENTS.md` del workspace (`../../../AGENTS.md`), el del repo (`../../AGENTS.md`), `bandadau-docs/docs/03-arquitectura/catalogo-servicios.md` y
-`bandadau-docs/docs/04-patrones-y-reglas/clean-architecture.md` (el ejemplo `CreatePost` es de este servicio).
+Lee primero el `AGENTS.md` del workspace (`../../../AGENTS.md`), el del repo (`../../AGENTS.md`), `bandadau-docs/docs/03-arquitectura/catalogo-servicios.md`,
+`bandadau-docs/docs/04-patrones-y-reglas/clean-architecture.md` y `bandadau-docs/docs/06-plan/fase-1-alcance-y-contrato-local.md` (normativo para la fase 1).
 
 ## Identidad
 
-Red social: perfiles académicos, posts (texto/imagen/video), comentarios, reacciones,
-seguimientos, grupos de estudio, denuncias, **feed personalizado** (ML `feed-ranker`) y
-**sugerencias** (`follow-suggester`). Mantiene una réplica local mínima de usuarios a
-partir de `bandada.identity.user.*`.
+Red social: perfiles académicos, posts (texto/imagen/video), comentarios, reacciones, seguimientos, grupos de estudio, denuncias y feed.
+Casos de uso UC-04…UC-10; soporta UC-18 (`/internal`). **Fase 1**: feed cronológico (puntaje = recencia, cursor estable `(createdAt,id)`), `getFollowSuggestions`
+vacío, sin ranker ML.
 
 ## Stack
 
-TypeScript · NestJS 11 · Node 24 · MongoDB 8 (`social`, replica set `rs0`) con Mongoose ·
-RabbitMQ (`@bandada/messaging-ts`) · `@bandada/auth-ts`, `@bandada/idempotency-ts`,
-`@bandada/contracts-ts` · OpenTelemetry · Jest o Vitest (elegir uno al crear el servicio y
-fijarlo aquí) · Testcontainers · dependency-cruiser. Verificar APIs de NestJS 11 y Mongoose instalados.
+TypeScript 5.9 · NestJS 11.2 · Node 24 · MongoDB 8 (`social`, replica set `rs0`) con el **driver nativo `mongodb` 7** (sin Mongoose: el inbox/outbox de
+`@bandada/messaging-ts` trabaja con `ClientSession`) · zod 4 (entrada → `400 VALIDATION_FAILED` con `errors[]`) · `@bandada/{auth-ts,idempotency-ts,messaging-ts,i18n,contracts-ts}` ·
+Jest 30 + ts-jest · dependency-cruiser · ESLint (`@bandada/eslint-config/node`).
 
 ## Arquitectura: Clean Architecture
 
 ```
 src/
-├── entities/            post, comment, reaction, profile, group, group-membership, follow,
-│                        content-report, value-objects/, policies/ (feed-ranking, follow-suggestion), errors/
-├── use-cases/           ports/, posts/, feed/, comments/, reactions/, follows/, groups/,
-│                        reports/, profiles/, media-events/, identity-events/, internal/
-├── interface-adapters/  controllers/{http,messaging}, presenters/, gateways/{mongo,messaging,http,ml}
-└── frameworks-drivers/  main.ts, app.module.ts, modules/, config/, database/, messaging/, observability/
-locales/{es,en}/errors.json   test/{unit,integration,e2e}
+├── entities/            post, profile, group, comment, content-report, follow, value-objects/ (post-text, media), policies/ (visibilidad, reportes, recencia), errors/
+├── use-cases/           ports/ (repositorios, MediaGateway, EventPublisher, UnitOfWork, Clock, IdGenerator), posts/ feed/ comments/ reactions/ follows/
+│                        groups/ reports/ profiles/ media-events/ identity-events/, events.ts (fábrica de eventos), outputs.ts
+├── interface-adapters/  controllers/{http (+dto/schemas zod), messaging}, presenters/ (contrato, Problem Details, cursor), gateways/{mongo, messaging (outbox), http (media-service)}
+└── frameworks-drivers/  main.ts, app.module.ts, modules/ (composition root con factories), config/env.ts (fail fast), database/indexes.ts
+test/{unit,integration,support}
 ```
 
-## Comandos (propuestos, desde la raíz de `bandadau-backend` con su pnpm workspace)
+- Casos de uso sin `@Injectable` (factory `useFactory` en `modules/social.module.ts`), puertos con `Symbol`.
+- `UnitOfWork` = transacción Mongo; la sesión viaja por `AsyncLocalStorage` (`MongoContext`) y los repos se unen a ella; el consumidor del inbox reutiliza `ctx.tx`.
+  `work` puede reejecutarse (reintento transitorio): sin efectos externos dentro.
+- No capturar errores de clave duplicada **dentro** de una transacción (la aborta): se usa `upsert + $setOnInsert` (follows, membresías, reacciones). `createPost` captura
+  `DUPLICATE_CLIENT_ID` **fuera** de la transacción y devuelve el post existente (200).
+- Eventos solo por outbox (`OutboxEventPublisher` → colección `outbox`, relay cada `OUTBOX_POLL_MS`).
+- `dependency-cruiser` (`.dependency-cruiser.cjs`) falla `pnpm build` si entities/use-cases importan adaptadores, frameworks, `@bandada/*` o módulos de Node.
+
+## Comandos (proyecto independiente: `corepack pnpm`, pnpm@10.34.7; sin workspace en la raíz)
 
 ```bash
-pnpm --filter social-service dev          # :7002 (watch)
-pnpm --filter social-service test         # unit
-pnpm --filter social-service test:int     # Testcontainers (Mongo rs0, RabbitMQ)
-pnpm --filter social-service test:e2e
-pnpm --filter social-service lint && pnpm --filter social-service typecheck
-pnpm --filter social-service arch         # dependency-cruiser
-pnpm --filter social-service build
+(cd ../../../bandadau-shared && corepack pnpm install --frozen-lockfile && corepack pnpm build)   # previo
+corepack pnpm install && corepack pnpm dev      # :7002
+corepack pnpm test                              # unitarias (sin infra)
+corepack pnpm test:int                          # integración HTTP real: Mongo rs0 + DynamoDB Local (infra viva); BD temporal social_it_*
+corepack pnpm lint && corepack pnpm typecheck && corepack pnpm arch && corepack pnpm build
 ```
 
-## Variables de entorno (`.env.example`)
+Jest corre con `NODE_OPTIONS=--experimental-vm-modules` (jose es ESM). Pruebas de integración: `TEST_MONGO_URI` (root + `directConnection=true`), `TEST_DYNAMODB_ENDPOINT`.
 
-```
-PORT=7002
-MONGODB_URI=mongodb://localhost:27017/social?replicaSet=rs0
-RABBITMQ_URL=amqp://bandada:bandada@localhost:5672
-JWKS_URL=http://localhost:7001/.well-known/jwks.json
-JWT_ISSUER=http://api.bandada.localhost
-IDENTITY_URL=http://localhost:7001
-SERVICE_CLIENT_ID=social-service
-SERVICE_CLIENT_SECRET=change-me
-MEDIA_SERVICE_URL=http://localhost:7003
-FEED_MODEL_PATH=./models/feed-ranker/coefficients.json
-IDEMPOTENCY_TABLE=bandada-idempotency
-DYNAMODB_ENDPOINT=http://localhost:8000
-AWS_REGION=us-east-1
-DEFAULT_LOCALE=es
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-OTEL_SERVICE_NAME=social-service
-```
+## Variables de entorno
+
+`.env.example` (validadas con zod al arrancar): `PORT=7002`, `MONGODB_URI`, `RABBITMQ_URL`, `JWKS_URL`, `JWT_ISSUER`, `IDENTITY_URL`, `SERVICE_CLIENT_ID/SECRET`,
+`MEDIA_SERVICE_URL`, `MEDIA_HTTP_TIMEOUT_MS`, `IDEMPOTENCY_TABLE`, `DYNAMODB_ENDPOINT`, `AWS_REGION`, `DEFAULT_LOCALE`, `CORS_ORIGINS`, `REPORT_HIDE_THRESHOLD=3`,
+`RATE_LIMIT_PER_MINUTE`, `OUTBOX_POLL_MS`, `PENDING_MEDIA_SWEEP_MS`, `MESSAGING_ENABLED`, `LOG_LEVEL`. `FEED_MODEL_PATH`/`OTEL_*` se aceptan y no se usan.
 
 ## Puertos y rutas
 
-Dev **7002**. Público: `/api/v1/profiles`, `/posts`, `/feed`, `/groups`, `/follows`,
-`/reports`. Interno: `/internal/v1/posts`, `/internal/v1/reports`, `/internal/v1/stats/daily`.
+Dev **7002**. Rutas públicas con prefijo `/api/v1` (Traefik no lo recorta): `profiles`, `posts`, `feed`, `groups`, `follows`, `reports`.
+Interno `/internal/v1/{posts,reports,profiles,groups,stats/daily}` con `@Internal()` (token de servicio `typ=service`, `aud=bandada-internal`; sin scopes exigidos).
+`/health/live` y `/health/ready` (Mongo + RabbitMQ).
 
 ## Contratos
 
-- Implementa `bandadau-docs/contracts/openapi/social-service.yaml` (operaciones de D1: `getMyProfile`,
-  `updateMyProfile`, `createPost` ♻️, `getFeed`, `createComment` ♻️, `setReaction`,
-  `getFollowSuggestions`, `reportContent` ♻️, grupos…).
-- Consume `media-service` `/internal/v1/media` (estado/propiedad de `mediaIds`) con timeout + circuit breaker.
+Implementa `bandadau-docs/contracts/openapi/social-service.yaml` completo (23 operaciones públicas + 7 internas, mismos `operationId`; la búsqueda de grupos es `listGroups`).
+Consume media-service `GET /internal/v1/media/{id}` y `/internal/v1/media/urls` con `ServiceTokenProvider` (`POST {IDENTITY_URL}/api/v1/auth/service-token`), timeout y circuit breaker.
 
 ## Mensajería
 
-- **Publica**: `bandada.social.post.created|published|hidden|deleted.v1`,
-  `…comment.created.v1`, `…reaction.set.v1`, `…follow.created.v1`,
-  `…group.join-requested.v1`, `…content.reported.v1`.
-- **Consume** (cola `social-service.events`): `bandada.media.asset.#` (aprobar/ocultar posts
-  `PENDING_MEDIA`), `bandada.identity.user.#` (réplica de usuario: nombre, universidad, estado).
+- **Publica** (outbox, `source=/services/social-service`): `bandada.social.{post.created,post.published,post.hidden,post.deleted,post.removed,comment.created,comment.hidden,reaction.set,follow.created,group.join-requested,content.reported}.v1`.
+- **Consume** `social-service.events` (inbox `processedMessages`, topología solo verificada): `bandada.media.asset.{approved,flagged,rejected}.v1`,
+  `bandada.identity.user.{registered,suspended,reactivated}.v1`; `role-changed`/`preferences-changed` se reconocen sin efecto (si no irían a la DLQ).
 
 ## Datos (Mongo `social`)
 
-Colecciones: `profiles`, `posts` (índice único `{authorId, clientId}`), `comments`,
-`reactions` (único `{postId, userId}`), `follows` (único `{followerId, followeeId}`),
-`groups`, `groupMemberships`, `contentReports`, `userReplicas`, `feedItems` (opcional,
-*fan-out on write*), `outbox`, `processedMessages`. Índices creados de forma idempotente al arrancar.
+`profiles`, `posts` (único `{authorId,clientId}`), `comments`, `reactions` (único `{postId,userId}`), `follows`, `groups`, `groupMemberships`, `contentReports`
+(único `{targetType,targetId,reporterId}`), `mediaAssetViews`, `outbox`, `processedMessages`. Índices idempotentes al arrancar (`database/indexes.ts`).
 
 ## Reglas específicas y gotchas
 
-- Un post con medios queda `PENDING_MEDIA` hasta que **todos** sus `MediaAsset` estén `APPROVED`
-  (invariante 6); un medio `REJECTED` → post `HIDDEN` + notificación al autor.
-- `clientId` (UUIDv7 del dispositivo) + índice único = idempotencia offline (D3); el caso de uso
-  devuelve el existente ante duplicado.
-- Feed: `FeedRankingPolicy` (entities) es pura; los coeficientes los carga un gateway desde JSON
-  (`bandadau-ml/notebooks/03-feed-ranker.ipynb`). Cursor incluye versión del ranking.
-- Transacciones Mongo requieren replica set (`rs0`): sin él falla el outbox.
-- Problem Details localizados por `Accept-Language` (`es` defecto) con `code` estable
-  (`MEDIA_REJECTED`, `MEDIA_NOT_OWNED`, `POST_NOT_FOUND`, `ALREADY_MEMBER`…). El contenido de posts
-  **no** se traduce ni se loguea.
-- `setReaction`/`follow` son idempotentes por naturaleza (PUT).
+- `mediaAssetViews` = read model de estados de medios (por eventos). `createPost` lo consulta primero y llama a media-service solo por ids desconocidos/no finales; media-service caído ⇒ `503`. `getMediaUrls` degrada a URLs `null` (feed/post nunca fallan).
+- PENDING_MEDIA → PUBLISHED solo cuando **todos** los medios están APPROVED; FLAGGED/REJECTED ⇒ HIDDEN (`MEDIA_FLAGGED`); un `APPROVE` humano posterior lo republica. Barrido (`PENDING_MEDIA_SWEEP_MS`) para carreras evento/post y ocultar los pendientes >24 h.
+- Avatar: `pendingAvatarMediaId` hasta `asset.approved` del mismo dueño; si el asset ya está APPROVED se promueve al instante; FLAGGED/REJECTED ⇒ `422 MEDIA_NOT_APPROVED`.
+- Denuncias: `$inc` atómico + `updateOne({status:'PUBLISHED'})` condicional dentro de una transacción ⇒ `post.hidden` sale una sola vez aun con denuncias concurrentes.
+- Suspensión de autor oculta posts (`hiddenReason=AUTHOR_SUSPENDED`; el AsyncAPI lo lista como propuesta) y comentarios; la reactivación los restaura. En `/internal` se presenta como `MODERATOR`.
+- `REMOVED` por moderador ⇒ `post.removed` (contenido conservado); `post.deleted` solo por borrado del autor (media-service borra objetos).
+- Problem Details con `code` estable y `title/detail` de `@bandada/i18n` según `Accept-Language`; los 404 usan `NOT_FOUND` (el contrato no define `POST_NOT_FOUND`).
+- El JWT de usuario es `typ=user`, `aud=bandada-app|bandada-admin` (lo emite identity-service).
 
-## Casos de uso
+## Definición de hecho (cubierto)
 
-UC-04, UC-05, UC-06, UC-07, UC-08, UC-09, UC-10; soporta UC-18 (estado de posts y denuncias vía
-`/internal`) y UC-01 (sugerir grupos desde n8n).
-
-## Definición de hecho
-
-`definition-of-done.md` §0, §2, §3 + dependency-cruiser en verde + prueba de post offline
-duplicado y de transición `PENDING_MEDIA → PUBLISHED/HIDDEN` por eventos de media.
+Pruebas de integración: `createPost` idempotente (misma clave / mismo `clientId` / 6 concurrentes), PENDING_MEDIA → PUBLISHED al aprobarse todos los medios (incluye evento duplicado),
+3 denuncias distintas ocultan una sola vez (4 concurrentes), comentario idempotente, grupo privado (solicitud, aprobación, salida, rechazo), feed con cursor sin duplicados y filtro de visibilidad.

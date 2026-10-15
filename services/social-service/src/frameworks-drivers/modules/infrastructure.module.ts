@@ -4,11 +4,11 @@ import { MongoInbox, MongoOutbox } from '@bandada/messaging-ts';
 import { type DynamicModule, Global, Inject, Injectable, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { MongoClient } from 'mongodb';
 
-import { OutboxEventPublisher } from '../../interface-adapters/gateways/messaging/outbox-event-publisher';
 import { MediaHttpGateway } from '../../interface-adapters/gateways/http/media-http.gateway';
+import { OutboxEventPublisher } from '../../interface-adapters/gateways/messaging/outbox-event-publisher';
 import { MongoContext, MongoUnitOfWork } from '../../interface-adapters/gateways/mongo/mongo-context';
-import { JsonLogger } from '../../interface-adapters/logger';
 import { SystemClock, UuidV7Generator } from '../../interface-adapters/gateways/system';
+import { JsonLogger } from '../../interface-adapters/logger';
 import { CLOCK, EVENT_PUBLISHER, ID_GENERATOR, MEDIA_GATEWAY, UNIT_OF_WORK } from '../../use-cases/ports';
 import type { Env } from '../config/env';
 import { ensureIndexes } from '../database/indexes';

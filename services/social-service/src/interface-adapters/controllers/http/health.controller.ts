@@ -1,6 +1,6 @@
 import { Public } from '@bandada/auth-ts/nest';
-import { RABBIT_CLIENT } from '@bandada/messaging-ts/nest';
 import type { RabbitMqClient } from '@bandada/messaging-ts';
+import { RABBIT_CLIENT } from '@bandada/messaging-ts/nest';
 import { Controller, Get, HttpException, Inject, Optional } from '@nestjs/common';
 
 import { MongoContext } from '../../gateways/mongo/mongo-context';

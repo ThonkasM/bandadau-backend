@@ -1,5 +1,5 @@
 import { DomainError } from '../../entities/errors/domain-error';
-import { canManageMembers, Group, initialMembershipStatus, type GroupPrivacy, type MembershipProps, type MembershipStatus } from '../../entities/group.entity';
+import { canManageMembers, Group, type GroupPrivacy, initialMembershipStatus, type MembershipProps, type MembershipStatus } from '../../entities/group.entity';
 import { SocialEvents } from '../events';
 import type { AuthorSummary } from '../outputs';
 import { paginate } from '../paginate';

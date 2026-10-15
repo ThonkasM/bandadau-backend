@@ -1,5 +1,5 @@
 import { DomainError } from '../../entities/errors/domain-error';
-import { newFollow, type FollowProps } from '../../entities/follow.entity';
+import { type FollowProps,newFollow } from '../../entities/follow.entity';
 import { SocialEvents } from '../events';
 import type { AuthorSummary } from '../outputs';
 import type { Clock, EventPublisher, FollowRepository, ProfileRepository, UnitOfWork } from '../ports';

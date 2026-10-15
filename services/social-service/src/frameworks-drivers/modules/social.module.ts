@@ -1,9 +1,10 @@
 import { Inject, Injectable, Module, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 
-import { FeedController, FollowsController, GroupsController, PostsController, ProfilesController, ReportsController } from '../../interface-adapters/controllers/http/social.controllers';
 import { HealthController } from '../../interface-adapters/controllers/http/health.controller';
 import { InternalController } from '../../interface-adapters/controllers/http/internal.controllers';
+import { FeedController, FollowsController, GroupsController, PostsController, ProfilesController, ReportsController } from '../../interface-adapters/controllers/http/social.controllers';
 import { IdentityEventsConsumer, MediaEventsConsumer } from '../../interface-adapters/controllers/messaging/events.consumers';
+import { MongoContext } from '../../interface-adapters/gateways/mongo/mongo-context';
 import {
   MongoCommentRepository,
   MongoContentStatsRepository,
@@ -16,7 +17,6 @@ import {
   MongoReportRepository,
 } from '../../interface-adapters/gateways/mongo/mongo-misc.repositories';
 import { MongoPostRepository } from '../../interface-adapters/gateways/mongo/mongo-post.repository';
-import { MongoContext } from '../../interface-adapters/gateways/mongo/mongo-context';
 import type { JsonLogger } from '../../interface-adapters/logger';
 import { newRequestContext, requestContext } from '../../interface-adapters/request-context';
 import { CreateCommentUseCase } from '../../use-cases/comments/create-comment.use-case';

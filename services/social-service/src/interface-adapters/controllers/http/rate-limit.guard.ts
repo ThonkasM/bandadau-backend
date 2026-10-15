@@ -1,7 +1,6 @@
+import type { RequestWithPrincipal } from '@bandada/auth-ts/nest';
 import { type CanActivate, type ExecutionContext, HttpException, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
-
-import type { RequestWithPrincipal } from '@bandada/auth-ts/nest';
 
 export const RATE_LIMIT_OPTIONS = Symbol('RateLimitOptions');
 export interface RateLimitOptions {

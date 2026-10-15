@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 
 import { DomainError } from '../../entities/errors/domain-error';
 import { newRequestContext, requestContext } from '../request-context';
-import { buildProblem, DOMAIN_STATUS, type BuildProblemInput, type Locale } from './problem-details';
+import { buildProblem, type BuildProblemInput, DOMAIN_STATUS, type Locale } from './problem-details';
 
 export const LOGGER_TOKEN = Symbol('JsonLogger');
 

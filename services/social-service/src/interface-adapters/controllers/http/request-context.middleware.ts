@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { uuidv7 } from '@bandada/messaging-ts';
 import { resolveLocaleFromAcceptLanguage } from '@bandada/i18n';
+import { uuidv7 } from '@bandada/messaging-ts';
 import type { NextFunction, Request, Response } from 'express';
 
 import type { JsonLogger } from '../../logger';

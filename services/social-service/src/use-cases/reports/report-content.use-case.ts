@@ -1,6 +1,6 @@
 import type { CommentProps } from '../../entities/comment.entity';
-import { DomainError } from '../../entities/errors/domain-error';
 import type { ContentReportProps, ReportReason, ReportTargetType } from '../../entities/content-report.entity';
+import { DomainError } from '../../entities/errors/domain-error';
 import { shouldAutoHide } from '../../entities/policies/report.policy';
 import { SocialEvents } from '../events';
 import type { Clock, CommentRepository, EventPublisher, IdGenerator, PostRepository, ReportRepository, UnitOfWork } from '../ports';

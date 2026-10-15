@@ -1,5 +1,5 @@
 import type { CommentProps } from '../../entities/comment.entity';
-import { resolvedStatusFor, type ContentReportProps, type ReportResolution, type ReportStatus } from '../../entities/content-report.entity';
+import { type ContentReportProps, type ReportResolution, type ReportStatus,resolvedStatusFor } from '../../entities/content-report.entity';
 import { DomainError } from '../../entities/errors/domain-error';
 import type { Post, PostStatus } from '../../entities/post.entity';
 import { SocialEvents } from '../events';

@@ -1,5 +1,5 @@
 import { HttpException, type PipeTransform } from '@nestjs/common';
-import { z } from 'zod';
+import { type z } from 'zod';
 
 interface FieldIssue {
   field: string;

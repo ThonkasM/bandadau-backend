@@ -1,4 +1,4 @@
-import { PermanentError, type CloudEvent, type MessageContext } from '@bandada/messaging-ts';
+import { type CloudEvent, type MessageContext,PermanentError } from '@bandada/messaging-ts';
 import { ConsumeMessage } from '@bandada/messaging-ts/nest';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ClientSession } from 'mongodb';

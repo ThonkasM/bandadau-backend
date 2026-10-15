@@ -1,0 +1,6 @@
+*
+!services/social-service
+**/node_modules
+**/dist
+**/.env
+**/coverage

@@ -1,4 +1,4 @@
-import { recencyScore, FEED_WINDOW_HOURS } from '../../entities/policies/feed-recency.policy';
+import { FEED_WINDOW_HOURS,recencyScore } from '../../entities/policies/feed-recency.policy';
 import type { PostOutput } from '../outputs';
 import { paginate } from '../paginate';
 import type { Clock, FollowRepository, KeysetCursor, MembershipRepository, Page, PostRepository, ProfileRepository } from '../ports';

@@ -1,5 +1,5 @@
 import { DomainError } from './errors/domain-error';
-import { assertValidMediaCombination, mediaVerdict, type MediaAssetView, type MediaStatus } from './value-objects/media';
+import { assertValidMediaCombination, type MediaAssetView, type MediaStatus,mediaVerdict } from './value-objects/media';
 import { extractHashtags, normalizePostText } from './value-objects/post-text';
 
 export type PostVisibility = 'PUBLIC' | 'FOLLOWERS' | 'GROUP';

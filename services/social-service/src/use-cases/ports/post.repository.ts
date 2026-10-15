@@ -1,4 +1,4 @@
-import type { Post, PostStatus, HiddenReason, ReactionType } from '../../entities/post.entity';
+import type { HiddenReason, Post, PostStatus, ReactionType } from '../../entities/post.entity';
 import type { KeysetCursor } from './pagination';
 
 export const POST_REPOSITORY = Symbol('PostRepository');

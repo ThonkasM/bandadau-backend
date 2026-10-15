@@ -1,13 +1,13 @@
 import { AuthModule, JwtAuthGuard, RolesGuard } from '@bandada/auth-ts/nest';
-import { IdempotencyInterceptor, IdempotencyModule } from '@bandada/idempotency-ts/nest';
-import { MessagingModule } from '@bandada/messaging-ts/nest';
-import { DomainError } from '../entities/errors/domain-error';
-import { type DynamicModule, type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { IdempotencyModule } from '@bandada/idempotency-ts/nest';
 import type { MongoInbox, MongoOutbox } from '@bandada/messaging-ts';
+import { MessagingModule } from '@bandada/messaging-ts/nest';
+import { type DynamicModule, type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
-import { requestContextMiddleware } from '../interface-adapters/controllers/http/request-context.middleware';
+import { DomainError } from '../entities/errors/domain-error';
 import { RATE_LIMIT_OPTIONS, RateLimitGuard } from '../interface-adapters/controllers/http/rate-limit.guard';
+import { requestContextMiddleware } from '../interface-adapters/controllers/http/request-context.middleware';
 import { SOCIAL_QUEUE } from '../interface-adapters/controllers/messaging/events.consumers';
 import type { JsonLogger } from '../interface-adapters/logger';
 import { domainErrorBody } from '../interface-adapters/presenters/problem-details';
@@ -65,7 +65,6 @@ export class AppModule implements NestModule {
         { provide: APP_GUARD, useExisting: JwtAuthGuard },
         { provide: APP_GUARD, useExisting: RolesGuard },
         { provide: APP_GUARD, useFactory: () => new RateLimitGuard({ perMinute: env.RATE_LIMIT_PER_MINUTE }) },
-        { provide: APP_INTERCEPTOR, useExisting: IdempotencyInterceptor },
       ],
     };
   }

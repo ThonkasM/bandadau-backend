@@ -1,4 +1,4 @@
-import type { Group, MembershipProps, MembershipStatus, GroupMemberRole } from '../../entities/group.entity';
+import type { Group, GroupMemberRole,MembershipProps, MembershipStatus } from '../../entities/group.entity';
 import type { KeysetCursor } from './pagination';
 
 export const GROUP_REPOSITORY = Symbol('GroupRepository');

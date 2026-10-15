@@ -1,7 +1,7 @@
 import type { Document } from 'mongodb';
 
 import { DomainError } from '../../../entities/errors/domain-error';
-import { Post, reactionKey, type HiddenReason, type PostStatus, type ReactionType } from '../../../entities/post.entity';
+import { type HiddenReason, Post, type PostStatus, reactionKey, type ReactionType } from '../../../entities/post.entity';
 import type { FeedQuery, KeysetCursor, PostRepository } from '../../../use-cases/ports';
 import { isDuplicateKey, keyset, type MongoContext } from './mongo-context';
 

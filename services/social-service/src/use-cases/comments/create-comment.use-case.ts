@@ -1,4 +1,4 @@
-import { newComment, type CommentProps } from '../../entities/comment.entity';
+import { type CommentProps,newComment } from '../../entities/comment.entity';
 import { DomainError } from '../../entities/errors/domain-error';
 import { SocialEvents } from '../events';
 import type { AuthorSummary } from '../outputs';
