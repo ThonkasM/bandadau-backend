@@ -1,0 +1,17 @@
+{
+  "extends": "@bandada/tsconfig/node.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "types": ["node", "jest"],
+    "declaration": false,
+    "incremental": false,
+    "noUncheckedIndexedAccess": true,
+    "strictPropertyInitialization": false,
+    "isolatedModules": true
+  },
+  "include": ["src", "test"]
+}

@@ -1,0 +1,12 @@
+.gradle
+build
+.git
+.env
+secrets
+*.pem
+*.log
+.idea
+.vscode
+README.md
+AGENTS.md
+CLAUDE.md

@@ -1,0 +1,17 @@
+{
+  "extends": "@bandada/tsconfig/node.json",
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "target": "ES2023",
+    "outDir": "dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "declaration": false,
+    "incremental": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["node", "jest"],
+    "isolatedModules": false
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

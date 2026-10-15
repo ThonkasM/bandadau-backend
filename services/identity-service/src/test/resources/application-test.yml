@@ -1,0 +1,16 @@
+bandada:
+  jwt:
+    kek: integration-test-kek-0123456789abcdef
+    issuer: http://api.bandada.localhost
+  web:
+    cookie-secure: false
+    rate-limit-enabled: false
+  rabbit:
+    declare-topology: true
+  outbox:
+    relay-interval: PT0.2S
+  service-clients: admin-gateway:gw-secret,events-service:ev-secret
+logging:
+  level:
+    root: WARN
+    com.bandadau: INFO

@@ -23,9 +23,10 @@ Cada servicio tiene su `AGENTS.md` con árbol de carpetas, comandos, variables, 
 
 - Cada servicio es **independiente**: su propio build, `Dockerfile`, `.env.example`, pruebas y versión.
   Nunca importar código de otro servicio; se integran por REST `/internal`, eventos o comandos.
-- Los servicios NestJS forman un **pnpm workspace** en la raíz de este repo (`pnpm-workspace.yaml`
-  con `services/{social,media,ticketing,insights}-service` y `services/admin-gateway`). Consumen
-  `@bandada/*` como dependencia local hermana: `file:../../../bandadau-shared/packages/<pkg>`.
+- Los servicios NestJS son **proyectos independientes** (cada uno con su `package.json`, lockfile y
+  `Dockerfile`; **no** hay workspace pnpm en la raíz, para evitar conflictos de lockfile y builds
+  acoplados). Consumen `@bandada/*` como dependencia local hermana:
+  `file:../../../bandadau-shared/packages/<pkg>`. Package manager: `corepack pnpm` (pnpm@10.34.7).
 - Java usa Gradle por servicio; PHP usa Composer por servicio.
 - Contratos: solo desde `../bandadau-docs/contracts/`. Contract-first (ver `../AGENTS.md`).
 - Las imágenes Docker se construyen desde `../bandadau-infra` con build context en `services/<x>`.
@@ -34,8 +35,7 @@ Cada servicio tiene su `AGENTS.md` con árbol de carpetas, comandos, variables, 
 ## Comandos
 
 ```bash
-pnpm install                              # dependencias de los servicios NestJS
-pnpm --filter social-service test         # pruebas de un servicio Nest
+(cd services/social-service && corepack pnpm install && corepack pnpm test)   # un servicio Nest
 (cd services/identity-service && ./gradlew test)
 (cd services/wallet-service && composer test)
 ```

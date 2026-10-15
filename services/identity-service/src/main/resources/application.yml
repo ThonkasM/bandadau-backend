@@ -1,0 +1,117 @@
+server:
+  port: ${PORT:7001}
+  forward-headers-strategy: framework
+  shutdown: graceful
+
+spring:
+  application:
+    name: identity-service
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/identity_db}
+    username: ${DATABASE_USER:identity}
+    password: ${DATABASE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  flyway:
+    enabled: true
+  rabbitmq:
+    addresses: ${RABBITMQ_URL:amqp://bandada:bandada@localhost:5672}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+  main:
+    banner-mode: off
+
+management:
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: health
+      path-mapping:
+        health: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        live:
+          include: livenessState
+        ready:
+          include: readinessState,db,rabbit
+  health:
+    mail:
+      enabled: false
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      add:
+        service: identity-service
+  level:
+    root: INFO
+
+bandada:
+  jwt:
+    issuer: ${JWT_ISSUER:http://api.bandada.localhost}
+    kek: ${JWT_KEK:}
+    key-id: ${JWT_KEY_ID:}
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:}
+    rotation-interval: ${JWT_ROTATION_INTERVAL:P90D}
+    activation-delay: ${JWT_ACTIVATION_DELAY:PT24H}
+    retiring-grace: ${JWT_RETIRING_GRACE:PT24H}
+  tokens:
+    access-ttl: ${ACCESS_TOKEN_TTL:PT15M}
+    refresh-ttl: ${REFRESH_TOKEN_TTL:P30D}
+    admin-refresh-ttl: ${ADMIN_REFRESH_TOKEN_TTL:PT12H}
+    handoff-ttl: ${HANDOFF_CODE_TTL:PT60S}
+    verification-ttl: ${VERIFICATION_CODE_TTL:PT15M}
+    service-token-ttl: ${SERVICE_TOKEN_TTL:PT5M}
+  urls:
+    app-base-url: ${APP_BASE_URL:http://app.bandada.localhost}
+    admin-base-url: ${ADMIN_BASE_URL:http://admin.bandada.localhost}
+  mail:
+    from: ${MAIL_FROM:no-reply@bandadau.com}
+    log-code: ${MAIL_LOG_CODE:false}
+  web:
+    cookie-secure: ${COOKIE_SECURE:true}
+    cors-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:3001,http://localhost:4201,http://localhost:8081,http://*.bandada.localhost}
+    rate-limit-enabled: ${RATE_LIMIT_ENABLED:true}
+    auth-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:60}
+    handoff-per-minute: ${HANDOFF_RATE_LIMIT_PER_MINUTE:10}
+    resend-min-interval: ${RESEND_MIN_INTERVAL:PT60S}
+    resend-per-hour: ${RESEND_PER_HOUR:5}
+    hide-existing-accounts: ${REGISTER_HIDE_EXISTING_ACCOUNTS:false}
+  outbox:
+    relay-interval: ${OUTBOX_RELAY_INTERVAL:PT1S}
+    batch-size: 100
+  rabbit:
+    declare-topology: ${RABBIT_DECLARE_TOPOLOGY:false}
+  service-clients: ${SERVICE_CLIENTS:}
+  default-locale: ${DEFAULT_LOCALE:es}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+bandada:
+  mail:
+    log-code: true
+  web:
+    cookie-secure: ${COOKIE_SECURE:false}
+  jwt:
+    kek: ${JWT_KEK:dev-only-kek-change-me}

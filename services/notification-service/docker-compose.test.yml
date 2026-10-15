@@ -1,0 +1,73 @@
+# Throw-away dependencies for the integration tests (unique names and high ports on purpose).
+#   docker compose -f docker-compose.test.yml up -d --wait mq dynamo mailpit
+#   docker compose -f docker-compose.test.yml run --rm tests vendor/bin/pest
+#   docker compose -f docker-compose.test.yml down -v
+name: bandada-notification-test
+
+x-test-env: &test-env
+  APP_ENV: testing
+  RABBITMQ_URL: amqp://bandada:bandada@mq:5672
+  RABBITMQ_DECLARE_TOPOLOGY: "true"
+  DYNAMODB_ENDPOINT: http://dynamo:8000
+  DYNAMODB_AUTO_CREATE_TABLES: "true"
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  AWS_DEFAULT_REGION: us-east-1
+  NOTIFICATIONS_TABLE: bandada-notifications
+  IDEMPOTENCY_TABLE: bandada-idempotency
+  JWKS_URL: http://identity.test/.well-known/jwks.json
+  JWT_ISSUER: http://api.bandada.localhost
+  APP_DEEP_LINK_BASE: http://app.bandada.localhost
+  MAIL_MAILER: smtp
+  MAIL_HOST: mailpit
+  MAIL_PORT: "1025"
+  MAIL_FROM_ADDRESS: no-reply@bandada.localhost
+  PUSH_ENABLED: "true"
+  CACHE_STORE: array
+  LOG_CHANNEL: "null"
+
+services:
+  mq:
+    image: rabbitmq:4-management-alpine
+    container_name: notification-test-mq
+    environment:
+      RABBITMQ_DEFAULT_USER: bandada
+      RABBITMQ_DEFAULT_PASS: bandada
+    ports: ["15611:5672", "15612:15672"]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: notification-test-mailpit
+    ports: ["15811:1025", "15812:8025"]
+    mem_limit: 128m
+
+  dynamo:
+    image: amazon/dynamodb-local:latest
+    container_name: notification-test-dynamo
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx256m"
+    ports: ["15711:8000"]
+    mem_limit: 512m
+
+  tests:
+    build:
+      context: .
+      target: dev
+    image: bandada-notification-tools:dev
+    container_name: notification-test-runner
+    profiles: ["tools"]
+    working_dir: /app
+    volumes: [".:/app"]
+    environment: *test-env
+    depends_on:
+      mq: { condition: service_healthy }
+      dynamo: { condition: service_started }
+      mailpit: { condition: service_started }
+    mem_limit: 512m

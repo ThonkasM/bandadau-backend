@@ -1,0 +1,37 @@
+deptrac:
+  paths:
+    - ./src
+    - ./app
+  exclude_files:
+    - '#.*/tests/.*#'
+  layers:
+    - name: Entities
+      collectors:
+        - type: directory
+          value: src/Entities/.*
+    - name: Ports
+      collectors:
+        - type: directory
+          value: src/UseCases/Ports/.*
+    - name: UseCases
+      collectors:
+        - type: directory
+          value: src/UseCases/(Notify|Inbox|Devices)/.*
+    - name: InterfaceAdapters
+      collectors:
+        - type: directory
+          value: src/InterfaceAdapters/.*
+    - name: Composition
+      collectors:
+        - type: directory
+          value: app/(Providers|Console|Logging|Support)/.*
+    - name: Framework
+      collectors:
+        - type: classLike
+          value: ^(Illuminate|Symfony|Monolog|Psr|PhpAmqpLib|Aws|Firebase|Ramsey|GuzzleHttp)\\.*
+  ruleset:
+    Entities: []
+    Ports: [Entities]
+    UseCases: [Entities, Ports]
+    InterfaceAdapters: [Entities, Ports, UseCases, Framework]
+    Composition: [Entities, Ports, UseCases, InterfaceAdapters, Framework]

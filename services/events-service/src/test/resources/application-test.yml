@@ -1,0 +1,29 @@
+bandada:
+  jwt:
+    issuer: http://api.bandada.localhost
+  identity:
+    client-id: events-service
+    client-secret: test-secret
+  media:
+    cover-check: on
+    timeout: PT1S
+  saga:
+    step-timeout: PT3S
+    resend-offsets: PT0.5S,PT1S,PT2S
+    compensation-backoff-base: PT0.5S
+    compensation-backoff-cap: PT2S
+    compensation-alert-after: PT4S
+    scheduler-interval: PT0.2S
+  outbox:
+    relay-interval: PT0.2S
+  rabbit:
+    declare-topology: true
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        concurrency: 2
+logging:
+  level:
+    root: WARN
+    com.bandadau: INFO

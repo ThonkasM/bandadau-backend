@@ -1,0 +1,82 @@
+# Throw-away dependencies for the integration tests (unique names and high ports on purpose).
+#   docker compose -f docker-compose.test.yml up -d --wait db mq dynamo
+#   docker compose -f docker-compose.test.yml run --rm tests vendor/bin/pest
+#   docker compose -f docker-compose.test.yml down -v
+name: bandada-wallet-test
+
+x-test-env: &test-env
+  APP_ENV: testing
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_DATABASE: wallet_db
+  DB_USERNAME: wallet
+  DB_PASSWORD: wallet-test
+  RABBITMQ_URL: amqp://bandada:bandada@mq:5672
+  RABBITMQ_DECLARE_TOPOLOGY: "true"
+  DYNAMODB_ENDPOINT: http://dynamo:8000
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  AWS_DEFAULT_REGION: us-east-1
+  IDEMPOTENCY_TABLE: bandada-idempotency
+  JWKS_URL: http://identity.test/.well-known/jwks.json
+  JWT_ISSUER: http://api.bandada.localhost
+  PAYMENT_SIMULATOR_ENABLED: "true"
+  PAYMENT_WEBHOOK_SECRET: test-webhook-secret-0123456789
+  CACHE_STORE: array
+  LOG_CHANNEL: "null"
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: wallet-test-db
+    environment:
+      POSTGRES_DB: wallet_db
+      POSTGRES_USER: wallet
+      POSTGRES_PASSWORD: wallet-test
+    ports: ["15501:5432"]
+    tmpfs: ["/var/lib/postgresql"]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wallet -d wallet_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  mq:
+    image: rabbitmq:4-management-alpine
+    container_name: wallet-test-mq
+    environment:
+      RABBITMQ_DEFAULT_USER: bandada
+      RABBITMQ_DEFAULT_PASS: bandada
+    ports: ["15601:5672", "15602:15672"]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  dynamo:
+    image: amazon/dynamodb-local:latest
+    container_name: wallet-test-dynamo
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx256m"
+    ports: ["15701:8000"]
+    mem_limit: 512m
+
+  tests:
+    build:
+      context: .
+      target: dev
+    image: bandada-wallet-tools:dev
+    container_name: wallet-test-runner
+    profiles: ["tools"]
+    working_dir: /app
+    volumes: [".:/app"]
+    environment: *test-env
+    depends_on:
+      db: { condition: service_healthy }
+      mq: { condition: service_healthy }
+      dynamo: { condition: service_started }
+    mem_limit: 512m

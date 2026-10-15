@@ -17,6 +17,8 @@ coverage/
 # Java / PHP
 .gradle/
 services/*/build/
+services/*/bin/
 services/*/vendor/
 services/*/storage/*.key
+services/*/.deptrac.cache
 .phpunit.result.cache

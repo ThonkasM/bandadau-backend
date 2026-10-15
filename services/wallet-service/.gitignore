@@ -1,0 +1,17 @@
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+!.env.testing
+.phpunit.cache
+.phpunit.result.cache
+/vendor
+/storage/*.key
+/storage/framework/cache/data/*
+/storage/framework/views/*
+/storage/framework/sessions/*
+/storage/logs/*
+!/storage/**/.gitignore
+.phpstan.cache
+/bootstrap/cache/*.php

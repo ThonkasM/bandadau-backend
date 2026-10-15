@@ -1,0 +1,52 @@
+deptrac:
+  paths:
+    - ./src
+    - ./app
+  exclude_files:
+    - '#.*/tests/.*#'
+  layers:
+    - name: Domain
+      collectors:
+        - type: directory
+          value: src/Domain/.*
+    - name: PortIn
+      collectors:
+        - type: directory
+          value: src/Application/Port/In/.*
+    - name: PortOut
+      collectors:
+        - type: directory
+          value: src/Application/Port/Out/.*
+    - name: UseCase
+      collectors:
+        - type: directory
+          value: src/Application/UseCase/.*
+    - name: AdapterIn
+      collectors:
+        - type: directory
+          value: src/Adapter/In/.*
+    - name: AdapterOut
+      collectors:
+        - type: directory
+          value: src/Adapter/Out/.*
+    - name: AdapterShared
+      collectors:
+        - type: directory
+          value: src/Adapter/Shared/.*
+    - name: Composition
+      collectors:
+        - type: directory
+          value: app/(Providers|Console|Logging|Support)/.*
+    - name: Framework
+      collectors:
+        - type: classLike
+          value: ^(Illuminate|Symfony|Monolog|Psr|PhpAmqpLib|Aws|Firebase|Ramsey|GuzzleHttp)\\.*
+  ruleset:
+    Domain: []
+    PortIn: [Domain]
+    PortOut: [Domain]
+    UseCase: [Domain, PortIn, PortOut]
+    AdapterIn: [Domain, PortIn, AdapterShared, Framework]
+    AdapterOut: [Domain, PortOut, AdapterShared, Framework]
+    AdapterShared: [Framework]
+    Composition: [Domain, PortIn, PortOut, UseCase, AdapterIn, AdapterOut, AdapterShared, Framework]

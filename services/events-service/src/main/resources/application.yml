@@ -1,0 +1,94 @@
+server:
+  port: ${PORT:7004}
+  forward-headers-strategy: framework
+  shutdown: graceful
+
+spring:
+  application:
+    name: events-service
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/events_db}
+    username: ${DATABASE_USER:events}
+    password: ${DATABASE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  flyway:
+    enabled: true
+  rabbitmq:
+    addresses: ${RABBITMQ_URL:amqp://bandada:bandada@localhost:5672}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        prefetch: 20
+        concurrency: 2
+        max-concurrency: 4
+        missing-queues-fatal: false
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+  main:
+    banner-mode: off
+
+management:
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: health
+      path-mapping:
+        health: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        live:
+          include: livenessState
+        ready:
+          include: readinessState,db,rabbit
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      add:
+        service: events-service
+  level:
+    root: INFO
+
+bandada:
+  jwt:
+    issuer: ${JWT_ISSUER:http://api.bandada.localhost}
+    jwks-url: ${JWKS_URL:http://localhost:7001/.well-known/jwks.json}
+  identity:
+    url: ${IDENTITY_SERVICE_URL:}
+    client-id: ${SERVICE_CLIENT_ID:events-service}
+    client-secret: ${SERVICE_CLIENT_SECRET:}
+  media:
+    cover-check: ${COVER_CHECK:on}
+    url: ${MEDIA_SERVICE_URL:http://localhost:7003}
+    timeout: ${MEDIA_TIMEOUT:PT2S}
+  saga:
+    step-timeout: ${SAGA_STEP_TIMEOUT:PT30S}
+    resend-offsets: ${SAGA_RESEND_OFFSETS:PT5S,PT10S,PT20S}
+    compensation-backoff-base: ${SAGA_COMPENSATION_BACKOFF:PT5S}
+    compensation-backoff-cap: ${SAGA_COMPENSATION_BACKOFF_CAP:PT60S}
+    compensation-alert-after: ${SAGA_COMPENSATION_ALERT_AFTER:PT2M}
+    scheduler-interval: ${SAGA_SCHEDULER_INTERVAL:PT5S}
+  events:
+    default-duration: ${EVENT_DEFAULT_DURATION:PT2H}
+    cancellation-cutoff: ${REGISTRATION_CANCELLATION_CUTOFF:PT24H}
+  outbox:
+    relay-interval: ${OUTBOX_RELAY_INTERVAL:PT1S}
+    batch-size: 100
+  rabbit:
+    declare-topology: ${RABBIT_DECLARE_TOPOLOGY:false}
+  default-locale: ${DEFAULT_LOCALE:es}
