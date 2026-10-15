@@ -19,10 +19,11 @@ public final class User {
     private final Instant createdAt;
     private Instant updatedAt;
     private long version;
+    private String displayName;
 
     public User(UUID id, Email email, UUID universityId, UserStatus status, Set<Role> roles, Language language,
                 ThemePreference theme, Instant emailVerifiedAt, String suspendedReason, Instant createdAt,
-                Instant updatedAt, long version) {
+                Instant updatedAt, long version, String displayName) {
         this.id = id;
         this.email = email;
         this.universityId = universityId;
@@ -35,12 +36,19 @@ public final class User {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.version = version;
+        this.displayName = displayName;
     }
 
     /** RN-01.7: the initial role is always STUDENT. */
-    public static User register(UUID id, Email email, UUID universityId, Language language, Instant now) {
+    public static User register(UUID id, Email email, UUID universityId, Language language, String displayName, Instant now) {
         return new User(id, email, universityId, UserStatus.PENDING_VERIFICATION, EnumSet.of(Role.STUDENT), language,
-                ThemePreference.SYSTEM, null, null, now, now, 0);
+                ThemePreference.SYSTEM, null, null, now, now, 0, displayName);
+    }
+
+    /** Name given at registration (D-10); {@code null} means "derive it from the email". */
+    public void rename(String newDisplayName, Instant now) {
+        displayName = newDisplayName;
+        updatedAt = now;
     }
 
     public void verifyEmail(Instant now) {
@@ -107,4 +115,5 @@ public final class User {
     public Instant createdAt() { return createdAt; }
     public Instant updatedAt() { return updatedAt; }
     public long version() { return version; }
+    public String displayName() { return displayName; }
 }

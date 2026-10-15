@@ -26,14 +26,15 @@ docker run --rm -p 7001:7001 --env-file .env --network <red-con-postgres-rabbit-
 Ver `.env.example` (completo y comentado). Se validan al arrancar (fallo con la lista de variables inválidas).
 Claves: `DATABASE_URL/USER/PASSWORD`, `RABBITMQ_URL`, `JWT_ISSUER`, `JWT_KEK`, `JWT_PRIVATE_KEY_PATH`, `SERVICE_CLIENTS`
 (`id:secret[:scope|scope],...`), `APP_BASE_URL`, `ADMIN_BASE_URL`, `SMTP_HOST/PORT`, `MAIL_LOG_CODE`, `COOKIE_SECURE`,
-`CORS_ORIGINS`, `AUTH_RATE_LIMIT_PER_MINUTE`, `REGISTER_HIDE_EXISTING_ACCOUNTS`, `RABBIT_DECLARE_TOPOLOGY` (solo dev standalone).
+`CORS_ORIGINS`, `AUTH_RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_STORE` (`postgres` por defecto, `memory`), `MCP_TOKEN_TTL`, `REGISTER_HIDE_EXISTING_ACCOUNTS` (`true` por defecto), `RABBIT_DECLARE_TOPOLOGY` (solo dev standalone).
 
 ## Endpoints (contrato `identity-service.yaml`)
 
 Implementados: `registerUser`, `verifyEmail`, `resendVerificationCode`, `login`, `refreshToken`, `logout`, `createHandoffCode`,
 `exchangeHandoffCode`, `issueServiceToken` (en `/api/v1/auth/service-token`), `getMe`, `updateMyPreferences`, `listUniversities`,
 `getJwks`, internos `searchUsers` (+ filtro extra `ids`), `updateUserRoles`, `updateUserStatus`, `createUniversity`, `updateUniversity`.
-Diferidos (fase 2): `createMcpToken`, `revokeMcpToken` → `501 FEATURE_DISABLED`.
+`createMcpToken` / `revokeMcpToken` (token `aud=mcp`, 8 h, solo ADMIN; registro de `jti` en `mcp_tokens`) y el interno `getMcpTokenStatus` (`GET /internal/v1/mcp-tokens/{id}`).
+`/internal/**` exige scope: `internal:read` (GET/HEAD) o `internal:write` (resto).
 Salud: `GET /health/live`, `GET /health/ready` (DB + RabbitMQ).
 
 Extensión sobre el contrato (documentada en `seguridad-y-sso.md` §5): cabecera `X-Bandada-Client: native|web|admin`; en `web`/`admin`

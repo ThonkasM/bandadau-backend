@@ -3,7 +3,7 @@ package com.bandadau.identity.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.bandadau.identity.adapter.in.web.Locales;
-import com.bandadau.identity.adapter.in.web.RateLimiter;
+import com.bandadau.identity.adapter.out.external.InMemoryRateLimiter;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
@@ -28,13 +28,13 @@ class WebSupportTest {
     @Test
     void rateLimiterAllowsUpToTheLimitThenReportsRetryAfter() {
         AtomicLong clock = new AtomicLong(0);
-        RateLimiter limiter = new RateLimiter(true, clock::get);
+        InMemoryRateLimiter limiter = new InMemoryRateLimiter(true, clock::get);
         assertThat(limiter.check("k", 2, Duration.ofMinutes(1))).isZero();
         assertThat(limiter.check("k", 2, Duration.ofMinutes(1))).isZero();
         assertThat(limiter.check("k", 2, Duration.ofMinutes(1))).isPositive();
         assertThat(limiter.check("other", 2, Duration.ofMinutes(1))).isZero();
         clock.set(61_000);
         assertThat(limiter.check("k", 2, Duration.ofMinutes(1))).isZero();
-        assertThat(new RateLimiter(false).check("k", 0, Duration.ofMinutes(1))).isZero();
+        assertThat(new InMemoryRateLimiter(false).check("k", 0, Duration.ofMinutes(1))).isZero();
     }
 }

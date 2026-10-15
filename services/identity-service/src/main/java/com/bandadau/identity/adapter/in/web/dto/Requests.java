@@ -14,7 +14,8 @@ public final class Requests {
             @NotBlank @Size(max = 254) @Email String email,
             @NotBlank @Size(min = 8, max = 128) String password,
             @NotNull UUID universityId,
-            @Pattern(regexp = "es|en") String locale) { }
+            @Pattern(regexp = "es|en") String locale,
+            @Size(min = 2, max = 80) String displayName) { }
 
     public record VerifyEmailRequest(
             @NotBlank @Size(max = 254) @Email String email,
@@ -39,6 +40,8 @@ public final class Requests {
             @NotBlank @Pattern(regexp = "^[A-Za-z0-9._~-]{43,128}$") String codeVerifier) { }
 
     public record ServiceTokenRequest(@NotBlank String clientId, @NotBlank String clientSecret, Set<String> scopes) { }
+
+    public record CreateMcpTokenRequest(@Size(max = 80) String label) { }
 
     public record UpdatePreferencesRequest(@Pattern(regexp = "es|en") String locale,
                                            @Pattern(regexp = "SYSTEM|LIGHT|DARK") String theme) { }

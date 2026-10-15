@@ -81,6 +81,7 @@ class IdentityIntegrationTest {
     @Autowired AmqpAdmin amqpAdmin;
     @Autowired RabbitTemplate rabbit;
     @Autowired JwtTokenIssuerAdapter issuer;
+    @Autowired org.springframework.jdbc.core.simple.JdbcClient jdbc;
 
     final HttpClient http = HttpClient.newHttpClient();
     static final List<Map<String, Object>> EVENTS = new CopyOnWriteArrayList<>();
@@ -475,5 +476,99 @@ class IdentityIntegrationTest {
         assertThat(set.getKeys().size()).isGreaterThanOrEqualTo(2);
         SignedJWT jwt = SignedJWT.parse(oldToken);
         assertThat(jwt.verify(new RSASSAVerifier(set.getKeyByKeyId(jwt.getHeader().getKeyID()).toRSAKey()))).isTrue();
+    }
+
+    @Test @Order(10)
+    void internalRoutesEnforceTheScopeByMethod() throws Exception {
+        Resp reader = call("POST", "/api/v1/auth/service-token", Map.of("clientId", "reader", "clientSecret", "ro-secret"));
+        assertThat(reader.status()).isEqualTo(200);
+        assertThat(reader.body().get("scopes")).isEqualTo(List.of("internal:read"));
+        String token = bearer((String) reader.body().get("accessToken"));
+        assertThat(SignedJWT.parse((String) reader.body().get("accessToken")).getJWTClaimsSet().getStringClaim("scope"))
+                .isEqualTo("internal:read");
+        assertThat(call("GET", "/internal/v1/users", null, "Authorization", token).status()).isEqualTo(200);
+        Resp write = call("PATCH", "/internal/v1/users/" + UUID.randomUUID() + "/roles", Map.of("roles", List.of("STUDENT")),
+                "Authorization", token, "X-Actor-Id", ACTOR.toString());
+        assertThat(write.status()).isEqualTo(403);
+        assertThat(write.body().get("code")).isEqualTo("FORBIDDEN");
+        // the full-scope client keeps working
+        assertThat(call("GET", "/internal/v1/users", null, "Authorization", bearer(serviceToken)).status()).isEqualTo(200);
+    }
+
+    @Test @Order(11)
+    void displayNameAtRegistrationReachesTheRegisteredEvent() throws Exception {
+        Resp r = call("POST", "/api/v1/auth/register", Map.of("email", "named@umsa.bo", "password", PASSWORD,
+                "universityId", universityId, "displayName", "Valeria Quispe"), "Idempotency-Key", UUID.randomUUID().toString());
+        assertThat(r.status()).isEqualTo(201);
+        String userId = (String) r.body().get("userId");
+        assertThat(verify("named@umsa.bo", CODES.get("named@umsa.bo")).status()).isEqualTo(200);
+        assertThat(((Map<?, ?>) awaitEvent("bandada.identity.user.registered.v1", userId).get("data")).get("displayName"))
+                .isEqualTo("Valeria Quispe");
+    }
+
+    @Test @Order(12)
+    void existingAccountIsHiddenByDefault() throws Exception {
+        activeUser("taken@umsa.bo");
+        Resp again = call("POST", "/api/v1/auth/register", Map.of("email", "taken@umsa.bo", "password", PASSWORD,
+                "universityId", universityId), "Idempotency-Key", UUID.randomUUID().toString());
+        assertThat(again.status()).isEqualTo(201);
+        assertThat(again.body()).containsEntry("status", "PENDING_VERIFICATION");
+    }
+
+    @Test @Order(13)
+    void mcpTokenLifecycleOnlyForAdmins() throws Exception {
+        Resp admin = activeUser("mcp.admin@umsa.bo");
+        String adminId = (String) ((Map<?, ?>) admin.body().get("user")).get("id");
+        Resp promote = call("PATCH", "/internal/v1/users/" + adminId + "/roles", Map.of("roles", List.of("STUDENT", "ADMIN")),
+                "Authorization", bearer(serviceToken), "X-Actor-Id", ACTOR.toString());
+        assertThat(promote.status()).isEqualTo(200);
+        Resp session = login("mcp.admin@umsa.bo");
+        String adminAccess = bearer((String) session.body().get("accessToken"));
+
+        Resp created = call("POST", "/api/v1/auth/mcp-tokens", Map.of("label", "Claude Desktop"), "Authorization", adminAccess);
+        assertThat(created.status()).isEqualTo(201);
+        assertThat(created.header("Cache-Control")).isEqualTo("no-store");
+        assertThat(created.body()).containsEntry("audience", "mcp").containsEntry("expiresIn", 28800)
+                .containsEntry("label", "Claude Desktop").containsEntry("tokenType", "Bearer");
+        assertThat(created.body().get("scopes")).isEqualTo(List.of("mcp:tools"));
+        String id = (String) created.body().get("id");
+        JWTClaimsSet claims = SignedJWT.parse((String) created.body().get("accessToken")).getJWTClaimsSet();
+        assertThat(claims.getAudience()).containsExactly("mcp");
+        assertThat(claims.getJWTID()).isEqualTo(id);
+        assertThat(claims.getStringClaim("scope")).isEqualTo("mcp:tools");
+        assertThat(claims.getStringClaim("typ")).isEqualTo("user");
+        assertThat(claims.getStringListClaim("roles")).contains("ADMIN");
+        assertThat(claims.getSubject()).isEqualTo(adminId);
+
+        // identity itself does not accept aud=mcp
+        assertThat(call("GET", "/api/v1/users/me", null, "Authorization",
+                bearer((String) created.body().get("accessToken"))).status()).isEqualTo(401);
+
+        Resp status = call("GET", "/internal/v1/mcp-tokens/" + id, null, "Authorization", bearer(serviceToken));
+        assertThat(status.status()).isEqualTo(200);
+        assertThat(status.body()).containsEntry("revoked", false);
+
+        assertThat(call("DELETE", "/api/v1/auth/mcp-tokens/" + id, null, "Authorization", adminAccess).status()).isEqualTo(204);
+        assertThat(call("DELETE", "/api/v1/auth/mcp-tokens/" + id, null, "Authorization", adminAccess).status()).isEqualTo(204);
+        assertThat(call("GET", "/internal/v1/mcp-tokens/" + id, null, "Authorization", bearer(serviceToken)).body())
+                .containsEntry("revoked", true);
+        assertThat(call("DELETE", "/api/v1/auth/mcp-tokens/" + UUID.randomUUID(), null, "Authorization", adminAccess).status())
+                .isEqualTo(404);
+        assertThat(call("GET", "/internal/v1/mcp-tokens/" + UUID.randomUUID(), null, "Authorization", bearer(serviceToken))
+                .status()).isEqualTo(404);
+    }
+
+    @Test @Order(14)
+    void postgresRateLimiterSharesTheWindowAndReportsRetryAfter() {
+        var limiter = new com.bandadau.identity.adapter.out.persistence.JdbcRateLimiter(jdbc);
+        String key = "it:" + UUID.randomUUID();
+        assertThat(limiter.check(key, 2, Duration.ofSeconds(30))).isZero();
+        assertThat(limiter.check(key, 2, Duration.ofSeconds(30))).isZero();
+        long wait = limiter.check(key, 2, Duration.ofSeconds(30));
+        assertThat(wait).isBetween(1L, 30L);
+        assertThat(limiter.check(key + "-other", 2, Duration.ofSeconds(30))).isZero();
+        jdbc.sql("UPDATE rate_limit_windows SET expires_at = now() - interval '1 second' WHERE limit_key = :k")
+                .param("k", key).update();
+        assertThat(limiter.check(key, 2, Duration.ofSeconds(30))).isZero();
     }
 }

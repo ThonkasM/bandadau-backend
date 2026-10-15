@@ -4,6 +4,8 @@ import com.bandadau.identity.adapter.in.web.dto.Requests.*;
 import com.bandadau.identity.adapter.in.web.dto.Responses.PageResponse;
 import com.bandadau.identity.adapter.in.web.dto.Responses.UniversityResponse;
 import com.bandadau.identity.adapter.in.web.dto.UserResponse;
+import com.bandadau.identity.adapter.in.web.dto.Responses.McpTokenStatusResponse;
+import com.bandadau.identity.application.port.in.ManageMcpTokensUseCase;
 import com.bandadau.identity.application.port.in.ManageUniversitiesUseCase;
 import com.bandadau.identity.application.port.in.ManageUsersUseCase;
 import com.bandadau.identity.application.port.in.ManageUsersUseCase.UserFilter;
@@ -26,10 +28,19 @@ import org.springframework.web.bind.annotation.*;
 public class InternalController {
     private final ManageUsersUseCase users;
     private final ManageUniversitiesUseCase universities;
+    private final ManageMcpTokensUseCase mcpTokens;
 
-    public InternalController(ManageUsersUseCase users, ManageUniversitiesUseCase universities) {
+    public InternalController(ManageUsersUseCase users, ManageUniversitiesUseCase universities,
+                              ManageMcpTokensUseCase mcpTokens) {
         this.users = users;
         this.universities = universities;
+        this.mcpTokens = mcpTokens;
+    }
+
+    /** insights-service asks this before accepting a token with aud=mcp (revocation, UC-22). */
+    @GetMapping("/mcp-tokens/{tokenId}")
+    public McpTokenStatusResponse getMcpTokenStatus(@PathVariable UUID tokenId) {
+        return McpTokenStatusResponse.from(mcpTokens.status(tokenId));
     }
 
     @GetMapping("/users")

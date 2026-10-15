@@ -9,7 +9,7 @@ bandada:
     declare-topology: true
   outbox:
     relay-interval: PT0.2S
-  service-clients: admin-gateway:gw-secret,events-service:ev-secret
+  service-clients: admin-gateway:gw-secret,events-service:ev-secret,reader:ro-secret:internal:read
 logging:
   level:
     root: WARN

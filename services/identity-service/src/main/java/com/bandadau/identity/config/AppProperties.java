@@ -12,7 +12,7 @@ public record AppProperties(Jwt jwt, Tokens tokens, Urls urls, Mail mail, Web we
                       Duration activationDelay, Duration retiringGrace) { }
 
     public record Tokens(Duration accessTtl, Duration refreshTtl, Duration adminRefreshTtl, Duration handoffTtl,
-                         Duration verificationTtl, Duration serviceTokenTtl) { }
+                         Duration verificationTtl, Duration serviceTokenTtl, Duration mcpTokenTtl) { }
 
     public record Urls(String appBaseUrl, String adminBaseUrl) { }
 
@@ -20,7 +20,7 @@ public record AppProperties(Jwt jwt, Tokens tokens, Urls urls, Mail mail, Web we
 
     public record Web(boolean cookieSecure, List<String> corsOrigins, boolean rateLimitEnabled, int authPerMinute,
                       int handoffPerMinute, Duration resendMinInterval, int resendPerHour,
-                      boolean hideExistingAccounts) { }
+                      boolean hideExistingAccounts, String rateLimitStore) { }
 
     public record Outbox(Duration relayInterval, int batchSize) { }
 

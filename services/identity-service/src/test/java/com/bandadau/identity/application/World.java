@@ -18,7 +18,7 @@ public final class World {
 
     public final AuthSettings settings = new AuthSettings(Duration.ofMinutes(15), Duration.ofDays(30),
             Duration.ofHours(12), Duration.ofSeconds(60), Duration.ofMinutes(15), Duration.ofMinutes(5),
-            "http://app.test", "http://admin.test", false);
+            Duration.ofHours(8), "http://app.test", "http://admin.test", false);
 
     public Instant now = START;
     public final Map<UUID, User> users = new LinkedHashMap<>();
@@ -27,6 +27,7 @@ public final class World {
     public final Map<UUID, University> universities = new LinkedHashMap<>();
     public final Map<String, RefreshToken> refreshTokens = new LinkedHashMap<>();
     public final Map<String, HandoffCode> handoffCodes = new HashMap<>();
+    public final Map<UUID, McpToken> mcpTokenStore = new LinkedHashMap<>();
     public final List<DomainEvent> events = new ArrayList<>();
     public final List<String[]> sentCodes = new ArrayList<>();
     public final University umsa;
@@ -40,6 +41,7 @@ public final class World {
     public final RefreshTokenService refresh;
     public final HandoffService handoff;
     public final ManageUsersUseCase manageUsers;
+    public final ManageMcpTokensUseCase mcpTokens;
 
     public World() {
         umsa = new University(id(), "UMSA", List.of("umsa.bo"), true);
@@ -59,6 +61,7 @@ public final class World {
         TokenIssuerPort tokens = new TokenIssuerPort() {
             @Override public String issueAccess(User u, TargetApp aud, Duration ttl) { return "access:" + u.id() + ":" + aud; }
             @Override public String issueService(String c, Set<String> s, Duration ttl) { return "service:" + c; }
+            @Override public String issueMcp(UUID id, User admin, Duration ttl) { return "mcp:" + id + ":" + admin.id(); }
             @Override public List<Map<String, Object>> publicKeys() { return List.of(); }
         };
         VerificationCodeSenderPort sender = new VerificationCodeSenderPort() {
@@ -132,6 +135,15 @@ public final class World {
             }
         };
 
+        McpTokenRepositoryPort mcpRepo = new McpTokenRepositoryPort() {
+            @Override public void insert(McpToken t) { mcpTokenStore.put(t.id(), t); }
+            @Override public Optional<McpToken> findById(UUID id) { return Optional.ofNullable(mcpTokenStore.get(id)); }
+            @Override public void revoke(UUID id, Instant at) {
+                mcpTokenStore.computeIfPresent(id, (k, t) -> new McpToken(t.id(), t.userId(), t.label(), t.createdAt(),
+                        t.expiresAt(), at));
+            }
+        };
+
         register = new RegisterUserService(userRepo, universityRepo, credentialRepo, verificationRepo, hasher, secrets,
                 sender, clock, ids, tx, settings);
         verify = new VerifyEmailService(userRepo, verificationRepo, publisher, refreshRepo, tokens, secrets, clock, ids,
@@ -141,6 +153,7 @@ public final class World {
         refresh = new RefreshTokenService(refreshRepo, userRepo, tokens, secrets, clock, ids, tx, settings);
         handoff = new HandoffService(handoffRepo, userRepo, refreshRepo, tokens, secrets, clock, ids, tx, settings);
         manageUsers = new ManageUsersService(userRepo, refreshRepo, publisher, clock, tx);
+        mcpTokens = new McpTokenService(mcpRepo, userRepo, tokens, clock, ids, tx, settings);
     }
 
     private static RefreshToken revoked(RefreshToken t, Instant at) {
@@ -162,7 +175,7 @@ public final class World {
 
     /** Registers and verifies a user, returning the active session. */
     public Session activeUser(String email, String password) {
-        register.register(new RegisterUserUseCase.RegisterUserCommand(email, password, umsa.id(), Language.ES));
+        register.register(new RegisterUserUseCase.RegisterUserCommand(email, password, umsa.id(), Language.ES, null));
         return verify.verify(email, lastCode(), TargetApp.APP);
     }
 }

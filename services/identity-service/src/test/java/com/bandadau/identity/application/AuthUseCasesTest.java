@@ -21,7 +21,7 @@ class AuthUseCasesTest {
     void setUp() { w = new World(); }
 
     private RegisterUserCommand cmd(String email) {
-        return new RegisterUserCommand(email, PASSWORD, w.umsa.id(), Language.ES);
+        return new RegisterUserCommand(email, PASSWORD, w.umsa.id(), Language.ES, null);
     }
 
     private static String codeOf(DomainException e) { return e.code(); }
@@ -42,9 +42,9 @@ class AuthUseCasesTest {
     void registerRejectsForeignDomainWeakPasswordAndUnknownUniversity() {
         assertThatThrownBy(() -> w.register.register(cmd("ana@gmail.com"))).extracting(e -> codeOf((DomainException) e))
                 .isEqualTo("EMAIL_DOMAIN_NOT_ALLOWED");
-        assertThatThrownBy(() -> w.register.register(new RegisterUserCommand("ana@umsa.bo", "short", w.umsa.id(), Language.ES)))
+        assertThatThrownBy(() -> w.register.register(new RegisterUserCommand("ana@umsa.bo", "short", w.umsa.id(), Language.ES, null)))
                 .extracting(e -> codeOf((DomainException) e)).isEqualTo("WEAK_PASSWORD");
-        assertThatThrownBy(() -> w.register.register(new RegisterUserCommand("ana@umsa.bo", PASSWORD, w.id(), Language.ES)))
+        assertThatThrownBy(() -> w.register.register(new RegisterUserCommand("ana@umsa.bo", PASSWORD, w.id(), Language.ES, null)))
                 .extracting(e -> codeOf((DomainException) e)).isEqualTo("UNIVERSITY_NOT_FOUND");
     }
 
@@ -79,6 +79,14 @@ class AuthUseCasesTest {
             assertThat(e.displayName()).isEqualTo("Ana Quispe");
             assertThat(e.language()).isEqualTo(Language.ES);
         });
+    }
+
+    @Test
+    void displayNameGivenAtRegistrationIsUsedInTheRegisteredEvent() {
+        w.register.register(new RegisterUserCommand("ana.quispe@umsa.bo", PASSWORD, w.umsa.id(), Language.ES, "  Ana María  "));
+        w.verify.verify("ana.quispe@umsa.bo", w.lastCode(), TargetApp.APP);
+        assertThat(w.events).singleElement().isInstanceOfSatisfying(UserRegistered.class,
+                e -> assertThat(e.displayName()).isEqualTo("Ana María"));
     }
 
     @Test

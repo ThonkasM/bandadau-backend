@@ -32,6 +32,7 @@ public final class Errors {
     public static DomainException invalidClient() { return new DomainException(UNAUTHORIZED, "INVALID_CLIENT"); }
     public static DomainException userNotFound() { return new DomainException(NOT_FOUND, "NOT_FOUND").with("resource", "user"); }
     public static DomainException universityMissing() { return new DomainException(NOT_FOUND, "NOT_FOUND").with("resource", "university"); }
+    public static DomainException mcpTokenNotFound() { return new DomainException(NOT_FOUND, "NOT_FOUND").with("resource", "mcp-token"); }
     public static DomainException lastAdmin() { return new DomainException(UNPROCESSABLE, "LAST_ADMIN"); }
     public static DomainException invalidStatusTransition(String from, String to) {
         return new DomainException(CONFLICT, "INVALID_STATUS_TRANSITION").with("from", from).with("to", to);

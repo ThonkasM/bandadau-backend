@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.bandadau.identity.application.port.out.RateLimitPort;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
@@ -16,11 +17,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/v1/auth/verify-email", "/api/v1/auth/resend-code", "/api/v1/auth/refresh",
             "/api/v1/auth/handoff/exchange", "/api/v1/auth/service-token");
 
-    private final RateLimiter limiter;
+    private final RateLimitPort limiter;
     private final ProblemFactory problems;
     private final int perMinute;
 
-    public RateLimitFilter(RateLimiter limiter, ProblemFactory problems, int perMinute) {
+    public RateLimitFilter(RateLimitPort limiter, ProblemFactory problems, int perMinute) {
         this.limiter = limiter;
         this.problems = problems;
         this.perMinute = perMinute;

@@ -80,6 +80,7 @@ bandada:
     handoff-ttl: ${HANDOFF_CODE_TTL:PT60S}
     verification-ttl: ${VERIFICATION_CODE_TTL:PT15M}
     service-token-ttl: ${SERVICE_TOKEN_TTL:PT5M}
+    mcp-token-ttl: ${MCP_TOKEN_TTL:PT8H}
   urls:
     app-base-url: ${APP_BASE_URL:http://app.bandada.localhost}
     admin-base-url: ${ADMIN_BASE_URL:http://admin.bandada.localhost}
@@ -90,11 +91,13 @@ bandada:
     cookie-secure: ${COOKIE_SECURE:true}
     cors-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:3001,http://localhost:4201,http://localhost:8081,http://*.bandada.localhost}
     rate-limit-enabled: ${RATE_LIMIT_ENABLED:true}
+    # memory = por instancia (tests); postgres = ventana fija compartida entre instancias (D-16)
+    rate-limit-store: ${RATE_LIMIT_STORE:postgres}
     auth-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:60}
     handoff-per-minute: ${HANDOFF_RATE_LIMIT_PER_MINUTE:10}
     resend-min-interval: ${RESEND_MIN_INTERVAL:PT60S}
     resend-per-hour: ${RESEND_PER_HOUR:5}
-    hide-existing-accounts: ${REGISTER_HIDE_EXISTING_ACCOUNTS:false}
+    hide-existing-accounts: ${REGISTER_HIDE_EXISTING_ACCOUNTS:true}
   outbox:
     relay-interval: ${OUTBOX_RELAY_INTERVAL:PT1S}
     batch-size: 100

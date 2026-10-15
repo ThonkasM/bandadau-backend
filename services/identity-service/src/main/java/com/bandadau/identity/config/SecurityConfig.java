@@ -19,6 +19,9 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -28,6 +31,7 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
 @Configuration
 public class SecurityConfig {
@@ -57,6 +61,12 @@ public class SecurityConfig {
             Collection<GrantedAuthority> authorities = new ArrayList<>();
             if ("service".equals(jwt.getClaimAsString("typ"))) {
                 authorities.add(new SimpleGrantedAuthority("ROLE_SERVICE"));
+                String scope = jwt.getClaimAsString("scope");
+                if (scope != null) {
+                    for (String s : scope.split(" ")) {
+                        if (!s.isBlank()) authorities.add(new SimpleGrantedAuthority("SCOPE_" + s));
+                    }
+                }
             } else {
                 authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
                 List<String> roles = jwt.getClaimAsStringList("roles");
@@ -65,6 +75,11 @@ public class SecurityConfig {
             return authorities;
         });
         return converter;
+    }
+
+    private static AuthorizationManager<RequestAuthorizationContext> serviceWith(String scope) {
+        return AuthorizationManagers.allOf(AuthorityAuthorizationManager.<RequestAuthorizationContext>hasRole("SERVICE"),
+                AuthorityAuthorizationManager.<RequestAuthorizationContext>hasAuthority("SCOPE_" + scope));
     }
 
     @Bean
@@ -84,7 +99,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/verify-email",
                                 "/api/v1/auth/resend-code", "/api/v1/auth/login", "/api/v1/auth/refresh",
                                 "/api/v1/auth/handoff/exchange", "/api/v1/auth/service-token").permitAll()
-                        .requestMatchers("/internal/**").hasRole("SERVICE")
+                        // D-7: /internal/** exige typ=service y el scope según el método (GET/HEAD leen, el resto escribe)
+                        .requestMatchers(HttpMethod.GET, "/internal/**").access(serviceWith("internal:read"))
+                        .requestMatchers(HttpMethod.HEAD, "/internal/**").access(serviceWith("internal:read"))
+                        .requestMatchers("/internal/**").access(serviceWith("internal:write"))
                         .requestMatchers("/api/v1/auth/mcp-tokens/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/**").hasRole("USER")
                         .anyRequest().denyAll())

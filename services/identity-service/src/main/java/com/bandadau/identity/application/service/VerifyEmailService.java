@@ -55,7 +55,7 @@ public final class VerifyEmailService implements VerifyEmailUseCase {
                 user.verifyEmail(now);
                 users.update(user);
                 events.publish(new UserRegistered(user.id(), user.email(), user.universityId(),
-                        displayName(user.email()), user.roles(), user.language(), now));
+                        user.displayName() != null ? user.displayName() : displayName(user.email()), user.roles(), user.language(), now));
                 return Attempt.ok(sessions.newFamily(user, client, now));
             }
             case ATTEMPTS_EXCEEDED -> {
@@ -71,7 +71,7 @@ public final class VerifyEmailService implements VerifyEmailUseCase {
         }
     }
 
-    /** The contract has no display name at registration: it is derived from the email local part. */
+    /** Fallback when registration gave no display name: derived from the email local part. */
     static String displayName(Email email) {
         StringBuilder out = new StringBuilder();
         for (String part : email.localPart().split("[._\\-+]+")) {

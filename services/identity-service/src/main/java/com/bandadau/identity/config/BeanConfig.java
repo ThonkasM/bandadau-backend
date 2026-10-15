@@ -92,7 +92,7 @@ public class BeanConfig {
     @Bean AuthSettings authSettings(AppProperties props) {
         AppProperties.Tokens t = props.tokens();
         return new AuthSettings(t.accessTtl(), t.refreshTtl(), t.adminRefreshTtl(), t.handoffTtl(), t.verificationTtl(),
-                t.serviceTokenTtl(), trimSlash(props.urls().appBaseUrl()), trimSlash(props.urls().adminBaseUrl()),
+                t.serviceTokenTtl(), t.mcpTokenTtl(), trimSlash(props.urls().appBaseUrl()), trimSlash(props.urls().adminBaseUrl()),
                 props.web().hideExistingAccounts());
     }
 
@@ -142,6 +142,14 @@ public class BeanConfig {
         return new ServiceTokenService(clients, tokens, settings);
     }
 
+    @Bean McpTokenRepositoryPort mcpTokenRepository(JdbcClient jdbc) { return new JdbcMcpTokenRepository(jdbc); }
+
+    @Bean ManageMcpTokensUseCase manageMcpTokens(McpTokenRepositoryPort mcpTokens, UserRepositoryPort users,
+                                                 TokenIssuerPort tokens, ClockPort clock, IdGeneratorPort ids,
+                                                 TransactionPort tx, AuthSettings settings) {
+        return new McpTokenService(mcpTokens, users, tokens, clock, ids, tx, settings);
+    }
+
     @Bean UserService userService(UserRepositoryPort users, EventPublisherPort events, TokenIssuerPort tokens,
                                   ClockPort clock, TransactionPort tx) {
         return new UserService(users, events, tokens, clock, tx);
@@ -160,7 +168,11 @@ public class BeanConfig {
         return new ProblemFactory(messages, mapper);
     }
 
-    @Bean RateLimiter rateLimiter(AppProperties props) { return new RateLimiter(props.web().rateLimitEnabled()); }
+    @Bean RateLimitPort rateLimiter(AppProperties props, JdbcClient jdbc) {
+        AppProperties.Web web = props.web();
+        if (web.rateLimitEnabled() && "postgres".equalsIgnoreCase(web.rateLimitStore())) return new JdbcRateLimiter(jdbc);
+        return new InMemoryRateLimiter(web.rateLimitEnabled());
+    }
 
     @Bean AuthController.Settings authControllerSettings(AppProperties props) {
         AppProperties.Web web = props.web();
@@ -174,7 +186,7 @@ public class BeanConfig {
         return bean;
     }
 
-    @Bean FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RateLimiter limiter, ProblemFactory problems,
+    @Bean FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RateLimitPort limiter, ProblemFactory problems,
                                                                   AppProperties props) {
         FilterRegistrationBean<RateLimitFilter> bean = new FilterRegistrationBean<>(
                 new RateLimitFilter(limiter, problems, props.web().authPerMinute()));

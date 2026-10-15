@@ -1,27 +1,28 @@
-package com.bandadau.identity.adapter.in.web;
+package com.bandadau.identity.adapter.out.external;
 
+import com.bandadau.identity.application.port.out.RateLimitPort;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
-/** In-memory fixed-window limiter (per instance); Traefik applies the edge limit. */
-public class RateLimiter {
+/** In-memory fixed-window limiter (per instance). Default for tests; production uses {@code JdbcRateLimiter}. */
+public class InMemoryRateLimiter implements RateLimitPort {
     private record Window(long start, int count) { }
 
     private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();
     private final LongSupplier millis;
     private final boolean enabled;
 
-    public RateLimiter(boolean enabled) {
+    public InMemoryRateLimiter(boolean enabled) {
         this(enabled, System::currentTimeMillis);
     }
 
-    public RateLimiter(boolean enabled, LongSupplier millis) {
+    public InMemoryRateLimiter(boolean enabled, LongSupplier millis) {
         this.enabled = enabled;
         this.millis = millis;
     }
 
-    /** @return seconds to wait when the limit is exceeded, or 0 when the call is allowed. */
+    @Override
     public long check(String key, int max, Duration window) {
         if (!enabled) return 0;
         long now = millis.getAsLong();

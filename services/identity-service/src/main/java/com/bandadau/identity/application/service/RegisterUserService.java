@@ -52,7 +52,7 @@ public final class RegisterUserService implements RegisterUserUseCase {
 
         String passwordHash = hasher.hash(cmd.password());
         String code = secrets.sixDigitCode();
-        Outcome outcome = tx.inTransaction(() -> persist(email, university, cmd.language(), passwordHash, code));
+        Outcome outcome = tx.inTransaction(() -> persist(email, university, cmd, passwordHash, code));
 
         long expiresIn = settings.verificationTtl().toSeconds();
         if (outcome.existingAccount()) {
@@ -64,17 +64,22 @@ public final class RegisterUserService implements RegisterUserUseCase {
         return new RegisteredUser(outcome.user().id(), email.value(), UserStatus.PENDING_VERIFICATION, expiresIn);
     }
 
-    private Outcome persist(Email email, University university, Language language, String passwordHash, String code) {
+    private Outcome persist(Email email, University university, RegisterUserCommand cmd, String passwordHash, String code) {
+        String displayName = cmd.displayName() == null || cmd.displayName().isBlank() ? null : cmd.displayName().trim();
         Instant now = clock.now();
         Optional<User> existing = users.findByEmail(email);
         if (existing.isPresent()) {
             User user = existing.get();
             if (user.status() != UserStatus.PENDING_VERIFICATION) return new Outcome(user, null, true);
             credentials.save(new Credential(user.id(), passwordHash, 0, null));
+            if (displayName != null) {
+                user.rename(displayName, now);
+                users.update(user);
+            }
             issueVerification(user, code, now);
             return new Outcome(user, code, false);
         }
-        User user = User.register(ids.newId(), email, university.id(), language, now);
+        User user = User.register(ids.newId(), email, university.id(), cmd.language(), displayName, now);
         users.insert(user);
         credentials.save(new Credential(user.id(), passwordHash, 0, null));
         issueVerification(user, code, now);

@@ -54,7 +54,7 @@ Dev **7001**. Público (Traefik): `/api/v1/auth/**`, `/api/v1/users/**`,
   `resendVerificationCode`, `login`, `refreshToken`, `logout`, `createHandoffCode`,
   `exchangeHandoffCode`, `issueServiceToken`, `getMe`, `updateMyPreferences`,
   `listUniversities`, `getJwks`, internos `searchUsers`, `updateUserRoles`,
-  `updateUserStatus`, `createUniversity`, `updateUniversity`.
+  `updateUserStatus`, `createUniversity`, `updateUniversity`, `getMcpTokenStatus`; `createMcpToken`, `revokeMcpToken` (UC-22).
 - No consume APIs de otros servicios.
 
 ## Decisiones de la fase 1
@@ -64,9 +64,11 @@ Dev **7001**. Público (Traefik): `/api/v1/auth/**`, `/api/v1/users/**`,
 - `signing_keys`: clave RSA generada al primer arranque, cifrada con `JWT_KEK` (AES-GCM); si `JWT_PRIVATE_KEY_PATH` existe se importa, si no se exporta ahí el PEM generado.
   Ciclo PENDING→ACTIVE→RETIRING→RETIRED (job diario, 90 d / 24 h).
 - Contrato manda sobre los UC: `registerUser` → 201, `INVALID_VERIFICATION_CODE` 422, `INVALID_REFRESH_TOKEN`, `HANDOFF_CODE_INVALID` 401; bloqueo de login → 429 `RATE_LIMITED` + `Retry-After`.
-- Registro de un correo ya activo: 409 `EMAIL_ALREADY_REGISTERED` (contrato); `REGISTER_HIDE_EXISTING_ACCOUNTS=true` aplica la anti-enumeración del UC-01 (201 + aviso por correo).
-- `displayName` de `user.registered` se deriva del correo (el contrato de registro no lo recibe).
-- Rate limit en memoria por IP en `/auth/*` y por correo/usuario en resend/handoff.
+- Registro de un correo ya activo: por defecto `REGISTER_HIDE_EXISTING_ACCOUNTS=true` aplica la anti-enumeración del UC-01 (201 + aviso por correo); con `false` responde 409 `EMAIL_ALREADY_REGISTERED`.
+- `displayName` (opcional, contrato 1.3.0) se guarda en `users.display_name` y viaja en `user.registered`; si falta se deriva del correo.
+- Rate limit (puerto `RateLimitPort`) por IP en `/auth/*` y por correo/usuario en resend/handoff: `RATE_LIMIT_STORE=postgres` (defecto; ventana fija compartida, tabla `rate_limit_windows`, UPSERT atómico con reloj de la BD, purga cada 5 min, *fail-open* si la BD falla) o `memory` (por instancia; tests). Ver ADR-0019.
+- `/internal/**` exige scope (D-7): GET/HEAD → `internal:read`, resto → `internal:write`. `SERVICE_CLIENTS=id:secret[:scope|scope]` (por defecto ambos).
+- Token MCP (UC-22): `aud=mcp`, `typ=user`, `roles=[ADMIN]`, `scope=mcp:tools`, 8 h, `jti` en `mcp_tokens`; insights consulta `GET /internal/v1/mcp-tokens/{jti}` para respetar la revocación. Identity rechaza `aud=mcp` en sus rutas.
 
 ## Mensajería
 
@@ -77,7 +79,7 @@ Dev **7001**. Público (Traefik): `/api/v1/auth/**`, `/api/v1/users/**`,
 ## Datos (`identity_db`)
 
 `universities`, `users`, `user_roles`, `credentials`, `email_verifications`,
-`refresh_tokens` (con `family_id`), `handoff_codes` (hash, `target_app`, `code_challenge`,
+`mcp_tokens`, `rate_limit_windows`, `refresh_tokens` (con `family_id`), `handoff_codes` (hash, `target_app`, `code_challenge`,
 `expires_at`, `used_at`), `outbox`, `processed_messages`.
 
 ## Reglas específicas y gotchas

@@ -5,6 +5,7 @@ import com.bandadau.identity.adapter.in.web.dto.Requests.*;
 import com.bandadau.identity.adapter.in.web.dto.Responses.*;
 import com.bandadau.identity.application.port.in.*;
 import com.bandadau.identity.application.port.in.CreateHandoffCodeUseCase.HandoffCreated;
+import com.bandadau.identity.application.port.out.RateLimitPort;
 import com.bandadau.identity.application.port.in.RegisterUserUseCase.RegisterUserCommand;
 import com.bandadau.identity.application.port.in.RegisterUserUseCase.RegisteredUser;
 import com.bandadau.identity.domain.exception.DomainException;
@@ -45,13 +46,15 @@ public class AuthController {
     private final CreateHandoffCodeUseCase createHandoff;
     private final ExchangeHandoffCodeUseCase exchangeHandoff;
     private final IssueServiceTokenUseCase serviceToken;
-    private final RateLimiter limiter;
+    private final ManageMcpTokensUseCase mcpTokens;
+    private final RateLimitPort limiter;
     private final Settings settings;
 
     public AuthController(RegisterUserUseCase register, VerifyEmailUseCase verify, ResendVerificationCodeUseCase resend,
                           LoginUseCase login, RefreshTokenUseCase refresh, LogoutUseCase logout,
                           CreateHandoffCodeUseCase createHandoff, ExchangeHandoffCodeUseCase exchangeHandoff,
-                          IssueServiceTokenUseCase serviceToken, RateLimiter limiter, Settings settings) {
+                          IssueServiceTokenUseCase serviceToken, ManageMcpTokensUseCase mcpTokens, RateLimitPort limiter,
+                          Settings settings) {
         this.register = register;
         this.verify = verify;
         this.resend = resend;
@@ -61,6 +64,7 @@ public class AuthController {
         this.createHandoff = createHandoff;
         this.exchangeHandoff = exchangeHandoff;
         this.serviceToken = serviceToken;
+        this.mcpTokens = mcpTokens;
         this.limiter = limiter;
         this.settings = settings;
     }
@@ -70,7 +74,7 @@ public class AuthController {
                                                              HttpServletRequest request) {
         Language language = body.locale() != null ? Language.fromCode(body.locale()) : Locales.language(request);
         RegisteredUser result = register.register(new RegisterUserCommand(body.email(), body.password(),
-                body.universityId(), language));
+                body.universityId(), language, body.displayName()));
         return ResponseEntity.status(HttpStatus.CREATED).body(new RegisterUserResponse(result.userId(), result.email(),
                 result.status().name(), result.verificationExpiresIn()));
     }
@@ -149,15 +153,20 @@ public class AuthController {
                 .body(new ServiceTokenResponse(token.accessToken(), "Bearer", token.expiresIn(), token.scopes()));
     }
 
-    /** Out of phase 1: MCP tokens are not issued yet. */
+    /** UC-22: token MCP de 8 h para un cliente externo; solo ADMIN (SecurityConfig). El JWT se muestra una sola vez. */
     @PostMapping("/mcp-tokens")
-    public ResponseEntity<Void> createMcpToken() {
-        throw Errors.featureDisabled();
+    public ResponseEntity<McpTokenResponse> createMcpToken(@RequestBody(required = false) @Valid CreateMcpTokenRequest body,
+                                                           @AuthenticationPrincipal Jwt jwt) {
+        ManageMcpTokensUseCase.IssuedMcpToken issued = mcpTokens.create(UUID.fromString(jwt.getSubject()),
+                body == null ? null : body.label());
+        return ResponseEntity.status(HttpStatus.CREATED).header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(McpTokenResponse.from(issued));
     }
 
     @DeleteMapping("/mcp-tokens/{tokenId}")
     public ResponseEntity<Void> revokeMcpToken(@PathVariable UUID tokenId) {
-        throw Errors.featureDisabled();
+        mcpTokens.revoke(tokenId);
+        return ResponseEntity.noContent().build();
     }
 
     private ResponseEntity<AuthTokensResponse> tokens(Session session, ClientMode mode, HttpServletResponse response) {

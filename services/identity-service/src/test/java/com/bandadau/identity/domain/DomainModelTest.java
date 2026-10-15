@@ -55,7 +55,7 @@ class DomainModelTest {
 
     @Test
     void userLifecycle() {
-        User user = User.register(UUID.randomUUID(), Email.of("ana@umsa.bo"), umsa.id(), Language.ES, NOW);
+        User user = User.register(UUID.randomUUID(), Email.of("ana@umsa.bo"), umsa.id(), Language.ES, null, NOW);
         assertThat(user.status()).isEqualTo(UserStatus.PENDING_VERIFICATION);
         assertThat(user.roles()).containsExactly(Role.STUDENT);
         assertThatThrownBy(() -> user.suspend("x", NOW)).isInstanceOf(DomainException.class);

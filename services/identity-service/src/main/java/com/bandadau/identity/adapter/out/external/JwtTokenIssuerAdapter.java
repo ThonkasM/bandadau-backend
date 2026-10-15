@@ -188,6 +188,25 @@ public class JwtTokenIssuerAdapter implements TokenIssuerPort {
     }
 
     @Override
+    public String issueMcp(UUID tokenId, User admin, Duration ttl) {
+        Instant now = clock.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .issuer(settings.issuer())
+                .subject(admin.id().toString())
+                .audience("mcp")
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plus(ttl)))
+                .jwtID(tokenId.toString())
+                .claim("typ", "user")
+                .claim("roles", admin.roles().stream().map(Role::name).sorted().toList())
+                .claim("uni", admin.universityId().toString())
+                .claim("locale", admin.language().code())
+                .claim("scope", "mcp:tools")
+                .build();
+        return sign(claims);
+    }
+
+    @Override
     public List<Map<String, Object>> publicKeys() {
         return publicKeySet().getKeys().stream().map(k -> k.toJSONObject()).toList();
     }
