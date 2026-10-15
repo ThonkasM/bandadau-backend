@@ -79,7 +79,7 @@ class ProcessingWorker implements ProcessingQueue, OnApplicationBootstrap, OnApp
     factory(GetMediaUrlsUseCase, MEDIA_REPOSITORY, OBJECT_STORAGE, CLOCK),
     factory(ListFlaggedMediaUseCase, MEDIA_REPOSITORY, OBJECT_STORAGE),
     factory(DecideMediaUseCase, MEDIA_REPOSITORY, OBJECT_STORAGE, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
-    factory(ProcessMediaUseCase, MEDIA_REPOSITORY, MODERATION_PORT, THUMBNAIL_GENERATOR, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
+    factory(ProcessMediaUseCase, MEDIA_REPOSITORY, MODERATION_PORT, THUMBNAIL_GENERATOR, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK, OBJECT_STORAGE),
     factory(RequeueStaleProcessingUseCase, MEDIA_REPOSITORY, CLOCK),
     factory(OnPostDeletedUseCase, MEDIA_REPOSITORY, OBJECT_STORAGE),
     { provide: PurgeStaleUploadsUseCase, inject: [MEDIA_REPOSITORY, OBJECT_STORAGE, CLOCK], useFactory: (m: never, s: never, c: { now(): Date }) => new PurgeStaleUploadsUseCase(m, s, () => c.now()) },

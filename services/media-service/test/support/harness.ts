@@ -24,7 +24,7 @@ export interface Harness {
 const MONGO = process.env.TEST_MONGO_URI ?? 'mongodb://root:mongo_dev@localhost:27017/?authSource=admin&directConnection=true';
 
 /** Boots the real AppModule against live Mongo/DynamoDB with a mock identity (JWKS + service-token) and a mock media-service. */
-export async function startHarness(moderationMode: 'allow-all' | 'manual' = 'allow-all'): Promise<Harness> {
+export async function startHarness(moderationMode: 'allow-all' | 'manual' | 'onnx' = 'allow-all', extraEnv: Record<string, string> = {}): Promise<Harness> {
   const { exportJWK, generateKeyPair, SignJWT } = await import('jose');
   const { publicKey, privateKey } = await generateKeyPair('RS256');
   const jwk: Record<string, unknown> = { ...(await exportJWK(publicKey)), kid: 'test', alg: 'RS256', use: 'sig' };
@@ -66,6 +66,7 @@ export async function startHarness(moderationMode: 'allow-all' | 'manual' = 'all
     AWS_SECRET_ACCESS_KEY: 'local',
     MESSAGING_ENABLED: 'false',
     RATE_LIMIT_PER_MINUTE: '100000',
+    ...extraEnv,
   } as NodeJS.ProcessEnv);
   process.env.AWS_ACCESS_KEY_ID = 'local';
   process.env.AWS_SECRET_ACCESS_KEY = 'local';

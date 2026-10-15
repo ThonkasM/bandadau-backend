@@ -1,5 +1,5 @@
 /** Clean Architecture dependency rule: source code dependencies point inwards only. `pnpm arch` (also part of `pnpm build`). */
-const FRAMEWORK_PACKAGES = '^(@nestjs|@bandada|mongodb|zod|helmet|sharp|express|rxjs|reflect-metadata|@aws-sdk|amqplib|amqp-connection-manager)';
+const FRAMEWORK_PACKAGES = '^(@nestjs|@bandada|mongodb|zod|helmet|sharp|onnxruntime-node|express|rxjs|reflect-metadata|@aws-sdk|amqplib|amqp-connection-manager)';
 
 module.exports = {
   forbidden: [

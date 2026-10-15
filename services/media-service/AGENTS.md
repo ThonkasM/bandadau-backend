@@ -5,8 +5,7 @@ Lee primero el `AGENTS.md` del workspace (`../../../AGENTS.md`), el del repo (`.
 
 ## Identidad
 
-Multimedia: subidas directas a S3/MinIO con URL prefirmada, moderación y URLs de lectura. **Fase 1**: sin ONNX/ffmpeg; `MODERATION_MODE=allow-all` (→ `APPROVED`) o `manual` (→ `FLAGGED`,
-cola del panel UC-18) detrás del puerto `ModerationPort` (`Phase1ModerationAdapter`); en fase 2 solo se sustituye el adaptador por los clasificadores ONNX (el contrato de eventos no cambia).
+Multimedia: subidas directas a S3/MinIO con URL prefirmada, moderación y URLs de lectura. `MODERATION_MODE=allow-all` (→ `APPROVED`), `manual` (→ `FLAGGED`, cola UC-18) u **`onnx`** (fase 2: `OnnxModerationAdapter` con el nsfw-classifier de `bandadau-ml`, ffmpeg para video) detrás del puerto `ModerationPort`; el contrato de eventos no cambia.
 Casos de uso: UC-05, UC-04 (avatar), UC-11 (portada), UC-18.
 
 ## Stack
@@ -46,7 +45,10 @@ Variables de prueba: `TEST_MONGO_URI`, `TEST_DYNAMODB_ENDPOINT`, `TEST_S3_ENDPOI
 
 `.env.example`: `PORT=7003`, `MONGODB_URI`, `RABBITMQ_URL`, `JWKS_URL`, `JWT_ISSUER`, `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_BUCKET_MEDIA`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
 `S3_FORCE_PATH_STYLE`, `UPLOAD_URL_TTL_SECONDS` (900), `MAX_IMAGE_BYTES`, `MAX_VIDEO_BYTES`, `MODERATION_MODE`, `IDEMPOTENCY_TABLE`, `DYNAMODB_ENDPOINT`, `CORS_ORIGINS`, `RATE_LIMIT_PER_MINUTE`, `OUTBOX_POLL_MS`, `STALE_PROCESSING_MS`.
-Las de modelos/ffmpeg (`MODEL_*`, `MODERATION_*_THRESHOLD`, `VIDEO_*`) se aceptan y se ignoran hasta la fase 2.
+Fase 2 (`MODERATION_MODE=onnx`): `MODEL_BUCKET` (def. `S3_BUCKET_MODELS`), `MODEL_NAME`, `MODEL_VERSION` (def. `MODEL_NSFW_VERSION`), `MODEL_VARIANT` (`fp32`|`int8`), `MODEL_CACHE_DIR`, `MODEL_RETRY_MS`, `ORT_THREADS`,
+`MODERATION_BLOCK_THRESHOLD`/`MODERATION_REVIEW_THRESHOLD` (opcionales; si no, los de `metadata.json`), `VIDEO_FRAME_INTERVAL_SECONDS`, `VIDEO_MAX_FRAMES`, `VIDEO_MAX_SECONDS`, `FFMPEG_PATH`, `FFPROBE_PATH`.
+Pruebas: el entorno Jest de integración (`test/support/jest-env-ort.js`) comparte `Float32Array` con onnxruntime-node; fixtures de paridad (`test/fixtures/nsfw-classifier`, generados por `bandadau-ml: make evaluate`). Memoria: ≥ 1 GB (ViT fp32 ≈ 343 MB).
+Gotchas: sharp y PIL no dan tensores idénticos (media |Δ| ≈ 0.003–0.023 en [-1,1]; Δprob < 0.03); el resultado persiste `frameScores`/`frameIndex` (no expuestos por la API: el contrato OpenAPI no los define).
 
 ## Puertos y rutas
 

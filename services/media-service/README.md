@@ -1,8 +1,11 @@
 # media-service (S3) — `:7003`
 
-Subidas directas a S3/MinIO con URL prefirmada, moderación de **fase 1** (`allow-all` / `manual`), URLs de lectura prefirmadas (15 min)
+Subidas directas a S3/MinIO con URL prefirmada, moderación (`allow-all` / `manual` de fase 1 y **`onnx`** de fase 2), URLs de lectura prefirmadas (15 min)
 y cola de moderación para el panel. NestJS 11 · Node 24 · MongoDB `media` · MinIO (`@aws-sdk/client-s3`) · `sharp` (miniaturas) · Clean Architecture.
-Sin ONNX/ffmpeg: el puerto `ModerationPort` queda listo para que la fase 2 enchufe los clasificadores.
+`MODERATION_MODE=onnx`: `OnnxModerationAdapter` (onnxruntime-node 1.30, CPU) carga `models/<MODEL_NAME>/<MODEL_VERSION>/` de MinIO (`bandada-models`, caché `MODEL_CACHE_DIR`, sha256 verificado),
+clasifica imágenes (sharp 224×224, normalización leída de `metadata.json`) y videos (ffmpeg: 1 fotograma/2 s, máx. 30; score = máximo; `frameScores`; miniatura = mejor fotograma; ≤60 s).
+Umbrales: ALLOW < 0.5 ≤ REVIEW < 0.85 ≤ BLOCK (de `metadata.json`, o `MODERATION_*_THRESHOLD`). Si el modelo no carga, **degrada a revisión manual** (todo `FLAGGED`), registra `MODERATION DEGRADED` en logs,
+`/health/ready` devuelve `moderation.state: DEGRADED` (sigue 200) y reintenta cada `MODEL_RETRY_MS`. Imagen Docker con ffmpeg (`--build-arg INSTALL_FFMPEG=false` para omitirlo). HEIC no se decodifica: va a revisión humana.
 
 ## Quick start
 

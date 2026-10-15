@@ -14,6 +14,9 @@ export interface ObjectStorage {
   /** HeadObject; null when the object does not exist. */
   head(key: string): Promise<{ size: number; contentType: string | undefined } | null>;
   delete(keys: readonly string[]): Promise<void>;
+  /** Downloads the whole object (<= MAX_VIDEO_BYTES). */
+  get(key: string): Promise<Buffer>;
+  put(key: string, body: Buffer, contentType: string): Promise<void>;
 }
 
 export interface ThumbnailGenerator {
@@ -27,9 +30,23 @@ export interface ModerationVerdict {
   decision: 'ALLOW' | 'REVIEW' | 'BLOCK';
   labels: string[];
   scores: Record<string, number>;
+  /** Video: P(nsfw) per frame and index of the worst frame. */
+  frameScores?: number[];
+  frameIndex?: number | null;
+  /** Video: best frame as JPEG, to be stored as the thumbnail. */
+  thumbnailJpeg?: Buffer;
 }
 
-/** Phase 1: allow-all / manual adapters. Phase 2 swaps in the ONNX classifiers (NSFW, violence, CLIP, OCR) behind this port. */
+export interface ModerationStatus {
+  mode: string;
+  /** READY: classifiers loaded; DEGRADED: model failed to load, everything goes to manual review; N/A: no classifier needed. */
+  state: 'READY' | 'DEGRADED' | 'N/A';
+  model?: string;
+  detail?: string;
+}
+
+/** allow-all / manual (phase 1) and onnx (phase 2: NSFW classifier + ffmpeg for video) adapters. */
 export interface ModerationPort {
   moderate(input: { assetId: string; storageKey: string; mimeType: string; kind: 'IMAGE' | 'VIDEO' }): Promise<ModerationVerdict>;
+  status?(): ModerationStatus;
 }

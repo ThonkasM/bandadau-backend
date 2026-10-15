@@ -21,7 +21,9 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1151.0",
+    "@aws-sdk/client-s3": "^3.1152.0",
     "@aws-sdk/lib-dynamodb": "^3.1151.0",
+    "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "@bandada/auth-ts": "file:../../../bandadau-shared/packages/auth-ts",
     "@bandada/contracts-ts": "file:../../../bandadau-shared/packages/contracts-ts",
     "@bandada/i18n": "file:../../../bandadau-shared/packages/i18n",
@@ -32,12 +34,11 @@
     "@nestjs/platform-express": "11.2.7",
     "helmet": "^8.3.0",
     "mongodb": "^7.7.0",
+    "onnxruntime-node": "1.30.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "zod": "^4.6.7",
-    "@aws-sdk/client-s3": "^3.1152.0",
-    "@aws-sdk/s3-request-presigner": "^3.1152.0",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@bandada/eslint-config": "file:../../../bandadau-shared/packages/eslint-config",
@@ -50,9 +51,9 @@
     "dependency-cruiser": "^18.6.0",
     "eslint": "^9.39.5",
     "jest": "^30.5.2",
+    "jose": "^6.2.12",
     "supertest": "^7.3.1",
     "ts-jest": "^29.4.14",
-    "typescript": "~5.9.3",
-    "jose": "^6.2.12"
+    "typescript": "~5.9.3"
   }
 }

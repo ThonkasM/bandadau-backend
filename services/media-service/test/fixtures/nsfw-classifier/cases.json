@@ -1,0 +1,32 @@
+{
+  "labels": [
+    "normal",
+    "nsfw"
+  ],
+  "cases": [
+    {
+      "image": "synthetic-00-k0.png",
+      "tensor": "synthetic-00-k0.tensor.f32.gz",
+      "probs": [
+        0.9978941082954407,
+        0.002105904510244727
+      ]
+    },
+    {
+      "image": "synthetic-02-k2.png",
+      "tensor": "synthetic-02-k2.tensor.f32.gz",
+      "probs": [
+        0.9993255138397217,
+        0.0006745070568285882
+      ]
+    },
+    {
+      "image": "flower.png",
+      "tensor": "flower.tensor.f32.gz",
+      "probs": [
+        0.9986456036567688,
+        0.0013544332468882203
+      ]
+    }
+  ]
+}

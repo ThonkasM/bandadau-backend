@@ -17,6 +17,8 @@ export interface ModerationResult {
   scores: Record<string, number>;
   decision: ModerationDecision;
   frameIndex: number | null;
+  /** Video only: P(nsfw) per analysed frame (score of the video = max). */
+  frameScores?: number[];
   createdAt: Date;
 }
 

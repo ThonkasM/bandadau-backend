@@ -48,6 +48,15 @@ export class S3ObjectStorage implements ObjectStorage, ThumbnailGenerator {
     await this.internal.send(new DeleteObjectsCommand({ Bucket: this.o.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));
   }
 
+  async get(key: string): Promise<Buffer> {
+    const object = await this.internal.send(new GetObjectCommand({ Bucket: this.o.bucket, Key: key }));
+    return Buffer.from(await (object.Body as { transformToByteArray(): Promise<Uint8Array> }).transformToByteArray());
+  }
+
+  async put(key: string, body: Buffer, contentType: string): Promise<void> {
+    await this.internal.send(new PutObjectCommand({ Bucket: this.o.bucket, Key: key, Body: body, ContentType: contentType }));
+  }
+
   async generate(originalKey: string, mimeType: string, thumbnailKey: string): Promise<string | null> {
     if (mimeType === 'image/heic') return null; // prebuilt sharp has no HEIC decoder: the original is served instead
     const { default: sharp } = await import('sharp');
