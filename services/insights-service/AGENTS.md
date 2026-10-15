@@ -43,55 +43,35 @@ src/
 └── frameworks-drivers/  main.ts, modules/, config/, prompts/{es,en}/ (prompts de sistema), observability/
 ```
 
-## Comandos (propuestos)
+## Estado de implementación (fase 2)
+
+Implementado y verificado: REST (público + `/internal/v1`), servidor MCP con las 12 herramientas, 2 recursos y 2 prompts,
+ReportAgent, MonitoringAgent, proyección `insights-service.analytics`, outbox, Dockerfile, compose y smoke.
+
+- Agentes = clientes MCP por **HTTP loopback** (`MCP_INTERNAL_URL`) con token de servicio.
+- `LlmPort`: `stub` (por defecto, determinista), `claude`, `ollama`. `TtsPort`: `none` (por defecto), `piper`, `polly`.
+- Estructura real: `src/{entities,use-cases,interface-adapters,frameworks-drivers}`; prompts en `frameworks-drivers/prompts/prompts.ts`.
+- Datos: `REPORT#`, `AGENTRUN#` (+`STEP#`, TTL 30 d), `ALERT#`, `METRIC#<name>/<fecha>`, `LOCK#`, `OUTBOX#`; GSI1 (`REPORT`, `AGENTRUN`, `ALERT#<status>`).
+
+### Divergencias de contrato (documentadas)
+- `/mcp` acepta el JWT de usuario ADMIN (aud `bandada-admin`) además del token MCP (`aud=mcp` + `mcp:tools`): identity aún no emite tokens MCP. `typ=mcp` no lo soporta `@bandada/auth-ts`.
+- Los tokens de servicio de identity traen `internal:*`, no `mcp:tools`: se autoriza por `MCP_SERVICE_CLIENTS` (`MCP_REQUIRE_SCOPE=true` lo exige).
+- Capability `resources.subscribe=false` (modo sin estado). `GET`/`DELETE /mcp` responden 405.
+- `get_content_stats.reactionsByType` va en 0: social no desglosa reacciones por tipo.
+- `QUEUE_BACKLOG` se mapea a `DLQ_BACKLOG` (no existe en `AlertKind`). `AgentRunStep.index` no se limita a 8 (se guardan pasos LLM y de herramienta).
+- El `generate_report` del agente se persiste con caso de uso interno (la herramienta MCP no recibe `reportId`); `MaxSteps=8` aplica al bucle de recolección.
+- Audio Piper es WAV (`summary.<locale>.wav`); Polly MP3.
+- Pendiente: presupuesto mensual LLM, modelo ONNX, OTel métricas, `query_metrics` requiere `PROMETHEUS_URL`.
+
+## Comandos
 
 ```bash
-pnpm --filter insights-service dev          # :7008 (REST + /mcp)
-pnpm --filter insights-service test | test:int | test:e2e | lint | typecheck | arch | build
-pnpm --filter insights-service mcp:inspect  # MCP Inspector contra http://localhost:7008/mcp (verificar herramienta)
+corepack pnpm test | test:int | lint | typecheck | arch | build | mcp:sync
+cd ../../../bandadau-infra && docker compose --profile infra --profile services up -d --build --no-deps insights-service
+make smoke    # o node smoke/smoke.mjs --only=insights
 ```
 
-## Variables de entorno (`.env.example`)
-
-```
-PORT=7008
-DYNAMODB_ENDPOINT=http://localhost:8000
-AWS_REGION=us-east-1
-INSIGHTS_TABLE=bandada-insights
-IDEMPOTENCY_TABLE=bandada-idempotency
-S3_ENDPOINT=http://localhost:9000
-S3_PUBLIC_ENDPOINT=http://localhost:9000
-S3_BUCKET_AUDIO=bandada-reports
-S3_BUCKET_MODELS=bandada-models
-RABBITMQ_URL=amqp://bandada:bandada@localhost:5672
-JWKS_URL=http://localhost:7001/.well-known/jwks.json
-JWT_ISSUER=http://api.bandada.localhost
-IDENTITY_URL=http://localhost:7001
-SERVICE_CLIENT_ID=insights-service
-SERVICE_CLIENT_SECRET=change-me
-EVENTS_SERVICE_URL=http://localhost:7004
-WALLET_SERVICE_URL=http://localhost:7005
-SOCIAL_SERVICE_URL=http://localhost:7002
-MEDIA_SERVICE_URL=http://localhost:7003
-RABBITMQ_MANAGEMENT_URL=http://localhost:15672
-LLM_PROVIDER=ollama                       # claude | ollama
-ANTHROPIC_API_KEY=
-LLM_MODEL=claude-sonnet-5-5
-LLM_MODEL_CHEAP=claude-haiku-5-5
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-TTS_PROVIDER=piper                        # polly | piper
-TTS_VOICE_ES=es-MX-neural                 # verificar ids reales de voz
-TTS_VOICE_EN=en-US-neural
-PIPER_URL=http://localhost:5002
-AGENT_MAX_STEPS=8
-AGENT_MAX_TOKENS=20000
-MONITORING_CRON=*/5 * * * *
-ANOMALY_MODEL_VERSION=1.0.0
-DEFAULT_LOCALE=es
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-OTEL_SERVICE_NAME=insights-service
-```
+Las pruebas de integración usan la infra viva con tablas/colas propias (prefijo `it…`) y nunca publican en `bandada.events`.
 
 ## Puertos y rutas
 
