@@ -1,4 +1,4 @@
-import { toUserErrors } from '../../common/errors';
+import { selfGuardError, toUserErrors } from '../../common/errors';
 import { clampFirst, connectionFromPage } from '../../common/relay';
 import type { DataSources } from '../../data-sources/data-sources';
 import type { IdentityUniversity, IdentityUser } from '../../data-sources/types';
@@ -32,6 +32,10 @@ export class UsersService {
   }
 
   async updateRoles(ctx: GatewayContext, input: { userId: string; roles: string[] }) {
+    if (input.roles.length === 0) return { user: null, errors: [selfGuardError('ROLES_REQUIRED', ctx.locale, ['input', 'roles'])] };
+    if (input.userId === ctx.principal?.sub && !input.roles.includes('ADMIN')) {
+      return { user: null, errors: [selfGuardError('CANNOT_DEMOTE_SELF', ctx.locale, ['input', 'roles'])] };
+    }
     try {
       const user = await this.ds.identity.updateRoles(ctx.call, input.userId, input.roles);
       ctx.loaders.users.clear(input.userId).prime(input.userId, user);
@@ -42,6 +46,7 @@ export class UsersService {
   }
 
   async suspend(ctx: GatewayContext, input: { userId: string; reason: string }) {
+    if (input.userId === ctx.principal?.sub) return { user: null, errors: [selfGuardError('CANNOT_SUSPEND_SELF', ctx.locale, ['input', 'userId'])] };
     try {
       const user = await this.ds.identity.updateStatus(ctx.call, input.userId, 'SUSPENDED', input.reason);
       ctx.loaders.users.clear(input.userId).prime(input.userId, user);

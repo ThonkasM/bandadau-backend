@@ -23,7 +23,7 @@ export class EventsService {
   }
 
   event(ctx: GatewayContext, id: string) {
-    return this.ds.events.getEvent(ctx.call, id, ctx.bearer as string).catch((e: unknown) => {
+    return this.ds.events.getEvent(ctx.call, id).catch((e: unknown) => {
       if (e && typeof e === 'object' && (e as { status?: number }).status === 404) return null;
       throw e;
     });

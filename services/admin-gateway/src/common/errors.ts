@@ -52,3 +52,21 @@ export function toUserErrors(error: unknown): UserError[] {
   }
   throw error;
 }
+
+const GUARD_MESSAGES: Record<string, { es: string; en: string }> = {
+  CANNOT_DEMOTE_SELF: { es: 'No puedes quitarte tu propio rol de administrador.', en: 'You cannot remove your own administrator role.' },
+  CANNOT_SUSPEND_SELF: { es: 'No puedes suspender tu propia cuenta.', en: 'You cannot suspend your own account.' },
+  ROLES_REQUIRED: { es: 'El usuario debe conservar al menos un rol.', en: 'The user must keep at least one role.' },
+  ALREADY_MODERATED: { es: 'Otro moderador ya resolvió este contenido.', en: 'Another moderator already resolved this content.' },
+};
+
+/** Gateway-side safeguards (the origin services do not know about the acting panel user). */
+export function selfGuardError(code: keyof typeof GUARD_MESSAGES, locale: string, field?: string[]): UserError {
+  const m = GUARD_MESSAGES[code]!;
+  return { code, message: locale === 'en' ? m.en : m.es, field: field ?? null };
+}
+
+/** `MEDIA_NOT_FLAGGED` (media-service) is exposed to the panel as `ALREADY_MODERATED`. */
+export function mapMediaModerationErrors(errors: UserError[], locale: string): UserError[] {
+  return errors.map((e) => (e.code === 'MEDIA_NOT_FLAGGED' ? { ...selfGuardError('ALREADY_MODERATED', locale), field: e.field } : e));
+}

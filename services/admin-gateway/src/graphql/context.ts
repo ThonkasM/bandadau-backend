@@ -4,7 +4,7 @@ import DataLoader from 'dataloader';
 import type { GraphQLError } from 'graphql';
 
 import type { DataSources } from '../data-sources/data-sources';
-import type { CallContext, IdentityUniversity, IdentityUser, MediaUrl, SagaDto, SocialProfile } from '../data-sources/types';
+import type { CallContext, IdentityUniversity, IdentityUser, MediaUrl, ModerationPost, SagaDto, SocialProfile } from '../data-sources/types';
 
 export interface Loaders {
   users: DataLoader<string, IdentityUser | null>;
@@ -12,6 +12,7 @@ export interface Loaders {
   media: DataLoader<string, MediaUrl | null>;
   universities: DataLoader<string, IdentityUniversity | null>;
   sagas: DataLoader<string, SagaDto[]>;
+  posts: DataLoader<string, ModerationPost | null>;
 }
 
 export interface GatewayContext {
@@ -24,6 +25,9 @@ export interface GatewayContext {
   /** Errors of components that failed but did not abort the operation (partial results). */
   partialErrors: GraphQLError[];
 }
+
+/** Pages of 100 sagas scanned to find the saga of a registration. */
+const SAGA_PAGES = 5;
 
 /** DataLoaders live as long as one request: never share them between users. */
 export function createLoaders(ds: DataSources, call: CallContext, options: { cache?: boolean } = {}): Loaders {
@@ -44,9 +48,17 @@ export function createLoaders(ds: DataSources, call: CallContext, options: { cac
       return ids.map((id) => found.get(id) ?? null);
     }),
     sagas: loader<SagaDto[]>(async (keys) => {
-      const recent = (await ds.events.listSagas(call, { limit: 50 })).items;
-      return keys.map(() => recent);
+      const all: SagaDto[] = [];
+      let cursor: string | undefined;
+      for (let i = 0; i < SAGA_PAGES; i++) {
+        const page = await ds.events.listSagas(call, { cursor, limit: 100 });
+        all.push(...page.items);
+        if (!page.nextCursor) break;
+        cursor = page.nextCursor;
+      }
+      return keys.map(() => all);
     }),
+    posts: loader<ModerationPost | null>((ids) => Promise.all(ids.map((id) => ds.social.getPost(call, id)))),
     universities: loader<IdentityUniversity | null>(async (ids) => {
       const all = new Map((await ds.identity.listUniversities(call)).map((u) => [u.id, u]));
       return ids.map((id) => all.get(id) ?? null);

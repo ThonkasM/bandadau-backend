@@ -29,7 +29,7 @@ export function moderationResolvers(service: ModerationService) {
     },
     ContentReport: {
       reporter: (r: { reporterId: string }, _: unknown, ctx: Ctx) => ctx.loaders.users.load(r.reporterId),
-      post: () => null,
+      post: (r: { targetType: string; targetId: string }, _: unknown, ctx: Ctx) => (r.targetType === 'POST' ? ctx.loaders.posts.load(r.targetId) : null),
       resolvedBy: () => null,
     },
   };

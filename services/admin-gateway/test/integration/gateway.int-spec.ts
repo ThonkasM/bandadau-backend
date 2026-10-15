@@ -140,6 +140,32 @@ describe('mutations', () => {
     expect(r.body.data.resolveContentReport).toEqual({ report: null, errors: [{ code: 'NOT_FOUND', message: 'Denuncia no encontrada' }] });
   });
 
+  it('panel safeguards: ROLES_REQUIRED, CANNOT_DEMOTE_SELF and CANNOT_SUSPEND_SELF never reach identity', async () => {
+    const empty = await h.gql(`mutation { updateUserRoles(input:{userId:"${ids.u1}", roles:[]}) { user { id } errors { code } } }`, { token: admin });
+    expect(empty.body.data.updateUserRoles).toEqual({ user: null, errors: [{ code: 'ROLES_REQUIRED' }] });
+    const demote = await h.gql(`mutation { updateUserRoles(input:{userId:"${ids.admin}", roles:[MODERATOR]}) { user { id } errors { code } } }`, { token: admin });
+    expect(demote.body.data.updateUserRoles).toEqual({ user: null, errors: [{ code: 'CANNOT_DEMOTE_SELF' }] });
+    const self = await h.gql(`mutation { suspendUser(input:{userId:"${ids.moderator}", reason:"x"}) { user { id } errors { code message } } }`, { token: moderator, lang: 'en' });
+    expect(self.body.data.suspendUser.errors[0]).toEqual({ code: 'CANNOT_SUSPEND_SELF', message: 'You cannot suspend your own account.' });
+    expect(h.callsTo('/identity/internal')).toHaveLength(0);
+  });
+
+  it('moderateMedia maps MEDIA_NOT_FLAGGED to ALREADY_MODERATED', async () => {
+    const mediaId = '0192a3b4-0000-7000-8000-000000000501';
+    h.mock('POST', `/media/internal/v1/media/${mediaId}/decision`, () => ({ status: 409, body: { code: 'MEDIA_NOT_FLAGGED', detail: 'Ya resuelto', status: 409 } }));
+    const m = await h.gql(`mutation { moderateMedia(id:"${mediaId}", decision: APPROVE) { media { id } errors { code } } }`, { token: moderator });
+    expect(m.body.data.moderateMedia).toEqual({ media: null, errors: [{ code: 'ALREADY_MODERATED' }] });
+  });
+
+  it('ContentReport.post is the real post (internal social endpoint) and Registration.saga is found beyond the first page', async () => {
+    const reportId = '0192a3b4-0000-7000-8000-000000000601';
+    const postId = '0192a3b4-0000-7000-8000-000000000602';
+    h.mock('GET', '/social/internal/v1/reports', () => ({ body: { items: [{ id: reportId, targetType: 'POST', targetId: postId, reporterId: ids.u1, reason: 'SPAM', details: null, status: 'OPEN', resolution: null, resolutionNote: null, createdAt: '2026-10-14T10:00:00Z', resolvedAt: null }], nextCursor: null } }));
+    h.mock('GET', `/social/internal/v1/posts/${postId}`, () => ({ body: { id: postId, authorId: ids.u2, text: 'hola', hashtags: [], visibility: 'PUBLIC', status: 'HIDDEN', media: [], reportsCount: 1, createdAt: '2026-10-14T09:00:00Z', updatedAt: '2026-10-14T09:00:00Z' } }));
+    const r = await h.gql('{ contentReports { id post { id text status } } }', { token: moderator });
+    expect(r.body.data.contentReports).toEqual([{ id: reportId, post: { id: postId, text: 'hola', status: 'HIDDEN' } }]);
+  });
+
   it('retrySaga and sagas go to events-service', async () => {
     const sagaId = '0192a3b4-0000-7000-8000-000000000700';
     const saga = { id: sagaId, type: 'REGISTRATION', registrationId: ids.u1, eventId: ids.u2, userId: ids.u3, step: 'REFUND_CREDITS', status: 'FAILED', failureReason: 'TIMEOUT', retries: 3, deadlineAt: null, startedAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:01:00Z' };

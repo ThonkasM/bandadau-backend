@@ -72,7 +72,7 @@ Dev **7010**. `/graphql` (POST + WebSocket `graphql-ws`; token en cabecera `Auth
 | `contentReports`, `resolveContentReport` | social `/internal/v1/reports` |
 | `moderateMedia` | media `POST /internal/v1/media/{id}/decision` |
 | `events`, `registrations`, `Event.registrations`, `sagas`, `retrySaga` | events `/internal/v1/**` |
-| `event(id)` | events `GET /api/v1/events/{id}` con el token del usuario |
+| `event(id)` | events `GET /internal/v1/events/{id}` (token de servicio) |
 | `dashboard`, `walletStats` | social `stats/daily`, events `stats/registrations`, wallet `stats/credits`, identity (conteo `newUsers`), cola de moderación |
 | `serviceHealth` | `GET /health/ready` de identity, social, media, events, wallet, ticketing y notification + management API de RabbitMQ |
 | `moderationQueueChanged` | RabbitMQ: `media.asset.#`, `social.content.reported.v1`, `social.post.hidden.v1` |
@@ -89,11 +89,15 @@ Dev **7010**. `/graphql` (POST + WebSocket `graphql-ws`; token en cabecera `Auth
 - Cada petición WebSocket crea DataLoaders **sin caché** para no servir datos viejos durante una suscripción larga.
 - Mensajes de `UserError` y `Accept-Language`: se propaga la cabecera a los servicios; los textos vienen localizados del servicio de origen.
 - Jest transpila con SWC porque `jose` 6 es solo ESM.
-- **Divergencias de contrato** (reportar en bandadau-docs): (1) no existe `GET /internal/v1/users/{id}` ni filtro `ids` en el OpenAPI de identity, pero
-  identity-service ya implementa `ids` y se usa para el DataLoader; (2) `suspendUser.until` no tiene campo equivalente en `UpdateUserStatusRequest` → se ignora;
-  (3) `User.suspendedAt/suspensionReason` no vienen del servicio (solo se rellenan tras suspender en la misma petición); (4) no hay `GET` interno de evento ni de post:
-  `event(id)` usa la API pública con el token del usuario y `ContentReport.post` devuelve `null`; (5) `Registration.saga` se resuelve buscando entre las
-  100 SAGAs más recientes; (6) el AGENTS original hablaba de `X-Acting-User`: el contrato usa `X-Actor-Id`; (7) la cola `admin-gateway.subscriptions.<id>` no figura aún
+- **Salvaguardas propias del gateway** (`users.service.ts`, `common/errors.ts`): `updateUserRoles` con lista vacía → `ROLES_REQUIRED`; un ADMIN que se quita su propio `ADMIN` → `CANNOT_DEMOTE_SELF`;
+  `suspendUser` sobre uno mismo → `CANNOT_SUSPEND_SELF` (se devuelven en `errors[]` sin llamar a identity, con el texto según `Accept-Language`);
+  `moderateMedia` traduce el `MEDIA_NOT_FLAGGED` de media-service a `ALREADY_MODERATED`.
+- **Divergencias de contrato** (reportar en bandadau-docs): (1) no existe `GET /internal/v1/users/{id}` en el OpenAPI de identity (`user(id)` = `ids=<id>`);
+  (2) `suspendUser.until` se **retiró** del contrato (GraphQL 1.3.0): identity no tiene suspensión temporal; (3) `User.suspendedAt/suspensionReason` solo se
+  muestran si identity los incluye en `/internal/v1/users` (hoy no: pendiente en identity; tras suspender en la misma petición se rellenan con el motivo enviado);
+  (4) `event(id)` usa `GET /internal/v1/events/{id}` y `ContentReport.post` usa `GET /internal/v1/posts/{id}` (D-6, token de servicio; los reportes de `COMMENT` devuelven
+  `post = null` porque no hay endpoint interno de comentario); (5) `Registration.saga` busca la SAGA en las 500 más recientes (5 páginas de 100; no hay filtro
+  `registrationId` en `listSagas`); (6) el AGENTS original hablaba de `X-Acting-User`: el contrato usa `X-Actor-Id`; (7) la cola `admin-gateway.subscriptions.<id>` no figura aún
   en el catálogo (ADR pendiente) y el usuario RabbitMQ del gateway debe poder declararla; (8) los eventos de moderación no traen el contenido completo, así que el `item`
   de la suscripción es mínimo (el cliente refresca con `moderationQueue`).
 

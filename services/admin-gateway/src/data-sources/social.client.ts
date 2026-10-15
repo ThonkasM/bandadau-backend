@@ -1,3 +1,4 @@
+import { ServiceHttpError } from '../common/errors';
 import type { ServiceHttp } from '../common/http-client';
 import type { CallContext, ContentDailyStats, ModerationPost, Page, SocialProfile, SocialReport } from './types';
 
@@ -8,6 +9,16 @@ export class SocialClient {
 
   listPostsByStatus(ctx: CallContext, q: { status?: string; cursor?: string; limit?: number }) {
     return this.http.request<Page<ModerationPost>>('GET', '/internal/v1/posts', { ...opts(ctx), query: { status: q.status ?? 'HIDDEN', cursor: q.cursor, limit: q.limit ?? 50 } });
+  }
+
+  /** Internal single post (D-6); `null` when it does not exist. */
+  async getPost(ctx: CallContext, postId: string): Promise<ModerationPost | null> {
+    try {
+      return await this.http.request<ModerationPost>('GET', `/internal/v1/posts/${postId}`, opts(ctx));
+    } catch (e) {
+      if (e instanceof ServiceHttpError && e.status === 404) return null;
+      throw e;
+    }
   }
 
   listReports(ctx: CallContext, q: { status?: string; cursor?: string; limit?: number }) {

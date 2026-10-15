@@ -1,4 +1,4 @@
-import { toUserErrors } from '../../common/errors';
+import { mapMediaModerationErrors, toUserErrors } from '../../common/errors';
 import { clampFirst, decodeOffset, encodeOffset } from '../../common/relay';
 import type { DataSources } from '../../data-sources/data-sources';
 import type { ModeratedMedia, ModerationPost, Page } from '../../data-sources/types';
@@ -77,7 +77,7 @@ export class ModerationService {
       const media = await this.ds.media.decide(ctx.call, args.id, { decision: args.decision, ...(args.note ? { note: args.note } : {}) });
       return { media: mediaModel(media), errors: [] };
     } catch (e) {
-      return { media: null, errors: toUserErrors(e) };
+      return { media: null, errors: mapMediaModerationErrors(toUserErrors(e), ctx.locale) };
     }
   }
 
