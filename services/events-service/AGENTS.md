@@ -12,8 +12,8 @@ Eventos y talleres universitarios e inscripciones con cupo y precio en créditos
 
 ## Stack
 
-Java 25 · Spring Boot 4 (Web MVC, Data JPA, AMQP, Security resource server, Actuator,
-Scheduling) · Gradle Kotlin DSL · PostgreSQL 18 (`events_db`) · Flyway · RabbitMQ ·
+Java 25 · Spring Boot 4.0.8 (Web MVC, **Spring JDBC `JdbcClient`**, AMQP, Security resource server, Actuator,
+Scheduling, Resilience4j circuit breaker) · Gradle Kotlin DSL · PostgreSQL 18 (`events_db`) · Flyway · RabbitMQ ·
 OpenTelemetry · JUnit 5 + Testcontainers + ArchUnit + Awaitility. Verificar APIs de Spring Boot 4 / Spring AMQP.
 
 ## Arquitectura: DDD táctico
@@ -27,39 +27,18 @@ src/main/java/com/bandadau/events/
 src/main/resources/{application.yml, db/migration, messages_es.properties, messages_en.properties}
 ```
 
-## Comandos (propuestos)
+## Comandos (verificados, todo en Docker)
 
 ```bash
-./gradlew bootRun                     # :7004
-./gradlew test                        # unit + integración + ArchUnit
-./gradlew test --tests '*saga*'       # suite de SAGA (S1–S10 de testing-strategy.md §6, nivel servicio)
-./gradlew spotlessCheck checkstyleMain build
+make test-unit      # dominio + tabla de transiciones SagaInstance + ArchUnit
+make test-java      # + integración Testcontainers: S1-S6, S9, S10, idempotencia, cover, internos (wallet/ticketing simulados en test)
+make image
+python3 scripts/simulate-participants.py   # wallet+ticketing de desarrollo vía API de management de RabbitMQ
+python3 scripts/smoke-e2e.py               # identity -> events -> saga completa
 ```
 
-## Variables de entorno (`.env.example`)
-
-```
-PORT=7004
-DATABASE_URL=jdbc:postgresql://localhost:5432/events_db
-DATABASE_USER=events
-DATABASE_PASSWORD=change-me
-RABBITMQ_URL=amqp://bandada:bandada@localhost:5672
-JWKS_URL=http://localhost:7001/.well-known/jwks.json
-JWT_ISSUER=http://api.bandada.localhost
-MEDIA_SERVICE_URL=http://localhost:7003
-SERVICE_CLIENT_ID=events-service
-SERVICE_CLIENT_SECRET=change-me
-SAGA_STEP_TIMEOUT=PT30S
-SAGA_SCHEDULER_INTERVAL=PT5S
-SAGA_COMMAND_MAX_RETRIES=3
-OUTBOX_RELAY_INTERVAL=PT1S
-IDEMPOTENCY_TABLE=bandada-idempotency
-DYNAMODB_ENDPOINT=http://localhost:8000
-AWS_REGION=us-east-1
-DEFAULT_LOCALE=es
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-OTEL_SERVICE_NAME=events-service
-```
+Variables: `.env.example`. Idempotencia HTTP en Postgres (`idempotency_keys`, mismo contrato HTTP de D3). Persistencia JDBC explícita
+(`SELECT ... FOR UPDATE` del evento serializa reservas de cupo; versión optimista + `CHECK` además).
 
 ## Puertos y rutas
 
@@ -71,6 +50,18 @@ Dev **7004**. Público `/api/v1/events/**`, `/api/v1/registrations/**`. Interno
 `bandadau-docs/contracts/openapi/events-service.yaml`: `createEvent` ♻️ (ORGANIZER), `publishEvent`,
 `listEvents` (`public=true` para la landing, sin JWT), `getEvent`, `registerToEvent` ♻️ (**202**),
 `getRegistration`, `listMyRegistrations`, `cancelRegistration` ♻️ (**202**), internos.
+
+## Decisiones de la fase 1
+
+- Saga exacta de D2/D15: paso 1 local (cupo + Registration PENDING + SagaInstance + comando en outbox); reenvíos de comandos a 5/10/20 s dentro de la ventana de 30 s; vencida → compensación
+  (timeout débito → `refund-credits` tombstone; timeout ticket → `void-ticket` → `refund-credits`); **compensaciones reintentadas sin límite** (backoff 5 s ×2, tope 60 s) con alerta a los 2 min
+  (log `event=saga.compensation.stuck` + métrica); `retrySaga` re-impulsa SAGAs `FAILED` y `COMPENSATING` atascadas. `FAILED` solo por `TICKET_ALREADY_USED`.
+  Débito tardío tras terminar → `refund-credits` defensivo. Respuestas fuera de paso / `ALREADY_VOIDED` se ignoran. Inbox `processed_messages` en la misma TX.
+- El contrato no trae `endsAt`: `endsAt = startsAt + EVENT_DEFAULT_DURATION` (2 h). Se valida el `coverMediaId` (propio, `APPROVED`) en `createEvent` con `COVER_CHECK=on`; `coverUrl` vía `getMediaUrls` (degrada a null).
+- Códigos del contrato: `INVALID_REGISTRATION_STATUS`, `CANCELLATION_WINDOW_CLOSED`, `MEDIA_NOT_APPROVED`, `INVALID_EVENT_STATUS`.
+- Evento cancelado por el organizador/ADMIN: una SAGA `CANCELLATION` por inscripción `CONFIRMED` (lotes de 50); inscripciones en vuelo se cancelan al confirmarse.
+- Los chaos flags (`CHAOS_TICKETING_FAIL`, `CHAOS_WALLET_DELAY_MS`) viven en ticketing/wallet; aquí solo existe el timeout. En las pruebas, los participantes simulados implementan esos comportamientos.
+- Retry de entrega: colas `events-service.saga-replies.retry.5s|30s|5m` (de la infra) y DLQ; si faltan, se reencola.
 
 ## Mensajería
 
