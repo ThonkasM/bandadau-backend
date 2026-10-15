@@ -85,6 +85,7 @@ export async function startHarness(overrides: { env?: Record<string, string> } =
     WALLET_SERVICE_URL: `${base}/wallet`,
     TICKETING_SERVICE_URL: `${base}/ticketing`,
     NOTIFICATION_SERVICE_URL: `${base}/notification`,
+    INSIGHTS_SERVICE_URL: `${base}/insights`,
     SERVICE_CLIENT_SECRET: 'it-secret',
     RABBITMQ_URL: rabbitUrl,
     CORS_ORIGINS: 'http://localhost:3001',

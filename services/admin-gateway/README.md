@@ -6,7 +6,7 @@ BFF GraphQL del panel de administración: agrega los `/internal/v1/**` de identi
 |---|---|
 | Stack | TypeScript + NestJS 11 · Apollo Server 5 (schema-first) · graphql 16 · graphql-ws · DataLoader |
 | Puerto dev | 7010 (`/graphql` HTTP + WebSocket, `/health/live`, `/health/ready`) |
-| Casos de uso | UC-18, UC-21, dashboard (UC-19/20 solo declarados: `FEATURE_DISABLED`) |
+| Casos de uso | UC-18, UC-21, dashboard (UC-19/20 vía insights-service; solo `createMcpToken`/`revokeMcpToken` siguen en `FEATURE_DISABLED`) |
 | Estado | Fase 1 implementada y probada (11 unitarias + 21 de integración con servicios mock y RabbitMQ real) |
 
 ## Proyecto independiente

@@ -153,13 +153,8 @@ describe('mutations', () => {
   });
 });
 
-describe('phase 2 fields', () => {
-  it('answer FEATURE_DISABLED', async () => {
-    expect(code(await h.gql('{ alerts { id } }', { token: admin }))).toBe('FEATURE_DISABLED');
-    expect(code(await h.gql('{ agentRuns { edges { cursor } } }', { token: admin }))).toBe('FEATURE_DISABLED');
-    expect(code(await h.gql('{ reports { edges { cursor } } }', { token: admin }))).toBe('FEATURE_DISABLED');
-    expect(code(await h.gql('mutation { requestReport(question: "q") { errors { code } } }', { token: admin }))).toBe('FEATURE_DISABLED');
-    expect(code(await h.gql('mutation { runMonitoringNow { errors { code } } }', { token: admin }))).toBe('FEATURE_DISABLED');
+describe('fields still disabled', () => {
+  it('MCP token mutations answer FEATURE_DISABLED (identity does not issue them yet); insights fields are live (see insights.int-spec.ts)', async () => {
     expect(code(await h.gql('mutation { createMcpToken { errors { code } } }', { token: admin }))).toBe('FEATURE_DISABLED');
     expect(code(await h.gql('mutation { revokeMcpToken(id:"0192a3b4-0000-7000-8000-000000000700") { errors { code } } }', { token: admin }))).toBe('FEATURE_DISABLED');
     expect(code(await h.gql('mutation { createMcpToken { errors { code } } }', { token: moderator }))).toBe('FORBIDDEN');
@@ -281,17 +276,12 @@ describe('subscriptions (graphql-ws + RabbitMQ)', () => {
     });
   });
 
-  it('refuses the subscription without a valid role, and phase 2 subscriptions answer FEATURE_DISABLED', async () => {
+  it('refuses the subscription without a valid token', async () => {
     const anon = await new Promise<unknown>((resolve) => {
       const c = h.wsClient(undefined);
       c.subscribe({ query: 'subscription { moderationQueueChanged { type } }' }, { next: resolve, error: resolve, complete: () => resolve('complete') });
     });
     expect(JSON.stringify(anon)).toContain('UNAUTHENTICATED');
-    const disabled = await new Promise<unknown>((resolve) => {
-      const c = h.wsClient(admin);
-      c.subscribe({ query: 'subscription { alertRaised { id } }' }, { next: resolve, error: resolve, complete: () => resolve('complete') });
-    });
-    expect(JSON.stringify(disabled)).toContain('FEATURE_DISABLED');
   });
 });
 

@@ -4,23 +4,14 @@ const off = (feature: string) => () => {
   throw featureDisabled(feature);
 };
 
-/** Phase 2 fields (insights, agents, MCP): declared by the SDL, answered with `extensions.code = FEATURE_DISABLED`. */
+/**
+ * Fields still disabled: MCP tokens (identity `createMcpToken`/`revokeMcpToken` answer FEATURE_DISABLED until the MCP token
+ * is issued by identity). The insights fields (reports, alerts, agentRuns, requestReport, acknowledgeAlert, runMonitoringNow,
+ * alertRaised, reportReady) are served by `modules/insights` since phase 2.
+ */
 export const disabledResolvers = {
-  Query: {
-    reports: off('reports'),
-    report: off('report'),
-    alerts: off('alerts'),
-    agentRuns: off('agentRuns'),
-  },
   Mutation: {
-    requestReport: off('requestReport'),
-    acknowledgeAlert: off('acknowledgeAlert'),
-    runMonitoringNow: off('runMonitoringNow'),
     createMcpToken: off('createMcpToken'),
     revokeMcpToken: off('revokeMcpToken'),
-  },
-  Subscription: {
-    alertRaised: { subscribe: off('alertRaised'), resolve: (p: unknown) => p },
-    reportReady: { subscribe: off('reportReady'), resolve: (p: unknown) => p },
   },
 };

@@ -170,3 +170,55 @@ export interface CreditStats {
   };
   series: { date: string; topUpCredits: number; debitCredits: number; refundCredits: number }[];
 }
+
+export interface InsightsReportDto {
+  id: string;
+  title: string | null;
+  question: string;
+  locale: 'es' | 'en';
+  status: 'PENDING' | 'RUNNING' | 'READY' | 'FAILED';
+  requestedBy: string;
+  agentRunId: string | null;
+  hasAudio: boolean;
+  createdAt: string;
+  completedAt: string | null;
+  markdown?: string | null;
+  dataset?: unknown;
+  chart?: unknown;
+  audioUrl?: string | null;
+  audioDurationSeconds?: number | null;
+  failureReason?: string | null;
+}
+
+export interface InsightsAlertDto {
+  id: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  kind: string;
+  message: string;
+  details?: Record<string, unknown>;
+  status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+  source: string;
+  agentRunId: string | null;
+  raisedAt: string;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string | null;
+  resource?: string | null;
+  occurrences?: number;
+}
+
+export interface InsightsAgentRunDto {
+  id: string;
+  agent: 'MONITORING' | 'REPORT' | 'EXTERNAL_MCP';
+  trigger: string;
+  status: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'ABORTED';
+  model?: string | null;
+  toolsUsed: string[];
+  tokens?: { input: number; output: number; total: number };
+  reportId: string | null;
+  alertIds: string[];
+  error: string | null;
+  stopReason: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  steps?: { index: number; kind: string; toolName: string | null; input: unknown; outputSummary: string | null; isError: boolean; startedAt: string; durationMs: number }[];
+}

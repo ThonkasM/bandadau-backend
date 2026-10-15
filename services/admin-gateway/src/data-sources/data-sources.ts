@@ -1,5 +1,6 @@
 import { EventsClient } from './events.client';
 import { IdentityClient } from './identity.client';
+import { InsightsClient } from './insights.client';
 import { MediaClient } from './media.client';
 import { SocialClient } from './social.client';
 import { WalletClient } from './wallet.client';
@@ -10,7 +11,8 @@ export interface DataSources {
   media: MediaClient;
   events: EventsClient;
   wallet: WalletClient;
+  insights: InsightsClient;
 }
 
 export const DATA_SOURCES = Symbol('DATA_SOURCES');
-export { EventsClient, IdentityClient, MediaClient, SocialClient, WalletClient };
+export { EventsClient, IdentityClient, InsightsClient, MediaClient, SocialClient, WalletClient };

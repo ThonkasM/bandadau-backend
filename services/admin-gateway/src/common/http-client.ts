@@ -11,6 +11,8 @@ export interface RequestOptions {
   correlationId?: string;
   /** Forward the user's own token instead of the service token (public `/api/v1` endpoints). */
   bearer?: string;
+  /** `Idempotency-Key` for POSTs with side effects (insights `requestReport`, `runMonitoringNow`). */
+  idempotencyKey?: string;
 }
 
 export interface HttpClientOptions {
@@ -56,6 +58,7 @@ export class ServiceHttp {
       : await this.serviceHeaders(opts);
     if (opts.bearer && opts.correlationId) headers['X-Correlation-Id'] = opts.correlationId;
     if (opts.locale) headers['Accept-Language'] = opts.locale;
+    if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
     headers.Accept = 'application/json';
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
 

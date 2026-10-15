@@ -6,6 +6,7 @@ export interface ServiceUrls {
   wallet: string;
   ticketing: string;
   notification: string;
+  insights: string;
 }
 
 export interface GatewayConfig {
@@ -64,6 +65,7 @@ export function loadConfig(env: Env = process.env): GatewayConfig {
       wallet: trim(required(env, 'WALLET_SERVICE_URL')),
       ticketing: trim(required(env, 'TICKETING_SERVICE_URL')),
       notification: trim(env.NOTIFICATION_SERVICE_URL ?? 'http://notification-service:7007'),
+      insights: trim(env.INSIGHTS_SERVICE_URL ?? 'http://insights-service:7008'),
     },
     serviceClientId: env.SERVICE_CLIENT_ID ?? 'admin-gateway',
     serviceClientSecret: required(env, 'SERVICE_CLIENT_SECRET'),

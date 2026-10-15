@@ -49,7 +49,7 @@ docker build --build-context shared=../bandadau-shared -f services/admin-gateway
 ## Variables de entorno (`.env.example` completo)
 
 `PORT`, `NODE_ENV`, `JWKS_URL`, `JWT_ISSUER`, `JWT_AUDIENCE` (`bandada-admin`), `IDENTITY_URL`, `SOCIAL_SERVICE_URL`, `MEDIA_SERVICE_URL`,
-`EVENTS_SERVICE_URL`, `WALLET_SERVICE_URL`, `TICKETING_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`, `INSIGHTS_SERVICE_URL` (fase 2, no usado),
+`EVENTS_SERVICE_URL`, `WALLET_SERVICE_URL`, `TICKETING_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`, `INSIGHTS_SERVICE_URL` (insights-service, fase 2),
 `SERVICE_CLIENT_ID`, `SERVICE_CLIENT_SECRET`, `SERVICE_TOKEN_SCOPES` (`internal:read,internal:write`), `RABBITMQ_URL`,
 `RABBITMQ_MANAGEMENT_URL/USER/PASSWORD` (opcional, `serviceHealth.queues`; usuario `monitor`), `GRAPHQL_MAX_DEPTH` (7), `GRAPHQL_MAX_COMPLEXITY` (1000),
 `GRAPHQL_INTROSPECTION` y `GRAPHQL_LANDING_PAGE` (por defecto activos solo si `NODE_ENV != production`), `CORS_ORIGINS` (con credenciales),
@@ -76,7 +76,8 @@ Dev **7010**. `/graphql` (POST + WebSocket `graphql-ws`; token en cabecera `Auth
 | `dashboard`, `walletStats` | social `stats/daily`, events `stats/registrations`, wallet `stats/credits`, identity (conteo `newUsers`), cola de moderación |
 | `serviceHealth` | `GET /health/ready` de identity, social, media, events, wallet, ticketing y notification + management API de RabbitMQ |
 | `moderationQueueChanged` | RabbitMQ: `media.asset.#`, `social.content.reported.v1`, `social.post.hidden.v1` |
-| Fase 2: `reports`, `report`, `alerts`, `agentRuns`, `requestReport`, `acknowledgeAlert`, `runMonitoringNow`, `createMcpToken`, `revokeMcpToken`, `alertRaised`, `reportReady` | error `extensions.code = FEATURE_DISABLED` |
+| Fase 2 (insights-service): `reports`, `report` (internal, token de servicio), `alerts`, `agentRuns` (detalle), `requestReport`, `acknowledgeAlert` (REST público con el token del ADMIN), `runMonitoringNow` (internal), subscriptions `alertRaised` y `reportReady` (cola de instancia con `bandada.insights.alert.raised.v1` y `report.ready.v1`) | `modules/insights` |
+| `createMcpToken`, `revokeMcpToken` (identity aún no emite tokens MCP) | error `extensions.code = FEATURE_DISABLED` |
 
 ## Reglas específicas y gotchas
 
