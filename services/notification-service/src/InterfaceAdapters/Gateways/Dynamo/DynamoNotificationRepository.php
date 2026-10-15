@@ -263,6 +263,7 @@ final readonly class DynamoNotificationRepository implements NotificationReposit
         if (! is_array($raw)) {
             return null;
         }
+
         return DynamoSupport::plain($this->marshaler, $raw);
     }
 

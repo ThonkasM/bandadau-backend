@@ -9,6 +9,7 @@ use Bandada\Notification\Entities\DeviceToken;
 use Bandada\Notification\Entities\Locale;
 use Bandada\Notification\Entities\Notification;
 use Bandada\Notification\Entities\NotificationPreference;
+use Bandada\Notification\Entities\NotificationType;
 use Bandada\Notification\UseCases\Ports\CommitRequest;
 use Bandada\Notification\UseCases\Ports\CommitResult;
 use Bandada\Notification\UseCases\Ports\DeviceRepository;
@@ -16,7 +17,6 @@ use Bandada\Notification\UseCases\Ports\NotificationRepository;
 use Bandada\Notification\UseCases\Ports\PreferenceRepository;
 use Bandada\Notification\UseCases\Ports\RenderedMessage;
 use Bandada\Notification\UseCases\Ports\TemplateRenderer;
-use Bandada\Notification\Entities\NotificationType;
 use DateTimeImmutable;
 
 /** In-memory doubles of every port, sharing one state (DynamoDB semantics of commit(): inbox + group claims). */
@@ -170,5 +170,4 @@ final class InMemoryWorld implements DeviceRepository, NotificationRepository, P
     {
         return new RenderedMessage("[{$locale->value}] {$type->value}", json_encode($params, JSON_UNESCAPED_UNICODE) ?: '');
     }
-
 }

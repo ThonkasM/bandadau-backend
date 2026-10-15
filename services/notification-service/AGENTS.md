@@ -1,116 +1,72 @@
 # AGENTS.md — notification-service (S7)
 
-Lee primero el `AGENTS.md` del workspace (`../../../AGENTS.md`), el del repo (`../../AGENTS.md`), `bandadau-docs/docs/03-arquitectura/catalogo-servicios.md`,
-`bandadau-docs/docs/04-patrones-y-reglas/clean-architecture.md` (§3, variante Laravel) y
-`bandadau-docs/docs/04-patrones-y-reglas/i18n.md` §6.
+Lee primero `../../../AGENTS.md`, `../../AGENTS.md`, `bandadau-docs/docs/03-arquitectura/catalogo-servicios.md`,
+`bandadau-docs/docs/04-patrones-y-reglas/clean-architecture.md`, `i18n.md` §6 y UC-24
+(`bandadau-docs/docs/02-iconix/03-casos-de-uso/UC-24-recibir-notificaciones.md`).
 
 ## Identidad
 
-Notificaciones **push** (Expo Push → APNs/FCM), **email** (SES / Mailpit) e **in-app**.
-Traduce eventos de dominio de otros contextos a notificaciones para personas, **en el idioma
-del destinatario** (`es`/`en`), respetando sus preferencias.
+Convierte eventos de dominio en notificaciones **in-app + email (+ push detrás de `PUSH_ENABLED`)** en el idioma del
+destinatario, respetando sus preferencias. Servicio terminal: no publica eventos.
 
 ## Stack
 
-PHP 8.4 · Laravel 12 · DynamoDB (`bandada-notifications`) con AWS SDK PHP · RabbitMQ
-(`php-amqplib`, verificar versión) · Blade/Markdown mail para plantillas · Pest · Larastan 8 · Pint · Deptrac.
+PHP 8.4 · Laravel 12.70 (composition root) · DynamoDB `bandada-notifications` (+ `bandada-idempotency`) · RabbitMQ (`php-amqplib`) ·
+Laravel Mailer (SMTP → Mailpit) · ICU `MessageFormatter` (ext-intl) · Pest · Larastan nivel 8 · Deptrac · Pint.
 
-## Arquitectura: Clean Architecture
+## Arquitectura: Clean
 
 ```
-src/  (Bandada\Notification\)
-├── Entities/            Notification, NotificationType, DeviceToken, NotificationPreference, Channel, Locale
-├── UseCases/
-│   ├── Ports/           NotificationRepository, DeviceRepository, PreferenceRepository, PushSender,
-│   │                    EmailSender, TemplateRenderer, UserDirectory (locale/email), Clock, IdGenerator
-│   ├── Notify/          NotifyRegistrationConfirmed, NotifyRegistrationFailed, NotifyNewComment,
-│   │                    NotifyNewReaction, NotifyNewFollower, NotifyGroupRequest, NotifyTopUpPaid,
-│   │                    NotifyContentFlagged, NotifyAlert, SendWelcomeEmail, SendEventReminder
-│   ├── Inbox/           ListNotifications, MarkAsRead, MarkAllAsRead
-│   └── Devices/         RegisterDevice, UnregisterDevice, GetPreferences, UpdatePreferences
-└── InterfaceAdapters/
-    ├── Controllers/{Http,Messaging}   Presenters/   Gateways/{Dynamo,Expo,Smtp,Blade}
-app/Providers/   app/Console/Commands/ConsumeNotificationEvents.php   routes/api.php
-resources/templates/{es,en}/<NotificationType>.{push,mail}.blade.php   lang/{es,en}/
+src/ (Bandada\Notification\)
+├── Entities/            Notification, NotificationType, Channel, ChannelSet, NotificationPreference, DeviceToken, ProfileSync, Locale
+├── UseCases/{Ports,Notify,Inbox,Devices}   HandleDomainEvent, SendNotification, EventToNotificationMapper, NotificationDelivery,
+│                                           ListNotifications, MarkAsRead, MarkAllAsRead, RegisterDevice, UnregisterDevice, Get/UpdatePreferences
+└── InterfaceAdapters/{Controllers/{Http,Messaging},Presenters,Gateways/{Dynamo,Expo,Smtp,Templates,System},Shared}
+app/{Providers/NotificationServiceProvider,Console/Commands,Logging,Support}  routes/api.php  lang/{es,en}  resources/views/mail
 ```
 
-## Comandos (propuestos)
+Deptrac: Entities → nada; UseCases → Entities+Ports; InterfaceAdapters → hacia adentro; falla el build si se viola.
+
+## Comandos
 
 ```bash
-composer install
-php artisan serve --port=7007
-php artisan notifications:consume           # consumidor de notification-service.events
-./vendor/bin/pest
-./vendor/bin/pint --test && ./vendor/bin/phpstan analyse && ./vendor/bin/deptrac analyse
+docker compose -f docker-compose.test.yml up -d --wait mq dynamo mailpit   # RabbitMQ:15611 Dynamo:15711 Mailpit:15811/15812
+docker compose -f docker-compose.test.yml run --rm tests vendor/bin/pest   # 57 pruebas (unitarias + integración real)
+docker compose -f docker-compose.test.yml run --rm tests sh -c "vendor/bin/pint --test && vendor/bin/phpstan analyse --memory-limit=512M && vendor/bin/deptrac analyse --fail-on-uncovered"
+docker compose -f docker-compose.test.yml down -v
+docker build -t bandada/notification-service:local .
 ```
 
-## Variables de entorno (`.env.example`)
+Roles de la imagen: `web` (por defecto, nginx+php-fpm :7007; espera las tablas Dynamo), `php artisan notifications:consume`
+(alias `bandada:consume`), `php artisan notifications:relay-outbox` (alias `bandada:relay`; **inactivo**: el servicio no
+publica eventos, existe solo para que el servicio Compose `notification-relay` sea sano; puede omitirse).
+Otros: `bandada:check-env`, `bandada:wait-for-schema` (verifica tablas y GSI1; crea solo con `DYNAMODB_AUTO_CREATE_TABLES=true`),
+`bandada:declare-topology` (solo dev/tests).
 
-```
-APP_ENV=local
-APP_KEY=
-APP_PORT=7007
-APP_LOCALE=es
-APP_FALLBACK_LOCALE=es
-DYNAMODB_ENDPOINT=http://localhost:8000
-AWS_DEFAULT_REGION=us-east-1
-NOTIFICATIONS_TABLE=bandada-notifications
-IDEMPOTENCY_TABLE=bandada-idempotency
-RABBITMQ_URL=amqp://bandada:bandada@localhost:5672
-JWKS_URL=http://localhost:7001/.well-known/jwks.json
-JWT_ISSUER=http://api.bandada.localhost
-MAIL_MAILER=smtp
-MAIL_HOST=localhost
-MAIL_PORT=1025
-MAIL_FROM_ADDRESS=no-reply@bandadau.com
-EXPO_PUSH_URL=https://exp.host/--/api/v2/push/send
-EXPO_ACCESS_TOKEN=
-APP_DEEP_LINK_BASE=http://app.bandada.localhost
-NOTIFICATION_TTL_DAYS=90
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-OTEL_SERVICE_NAME=notification-service
-```
+## Variables (ver `.env.example`)
 
-## Puertos y rutas
+`NOTIFICATIONS_TABLE`, `IDEMPOTENCY_TABLE`, `DYNAMODB_ENDPOINT`, `AWS_*`, `RABBITMQ_URL`, `RABBITMQ_DECLARE_TOPOLOGY`, `JWKS_URL`,
+`JWT_ISSUER`, `NOTIFICATION_TTL_DAYS`, `APP_DEEP_LINK_BASE`, `EMAIL_ENABLED`, `PUSH_ENABLED`, `EXPO_PUSH_URL`, `EXPO_ACCESS_TOKEN`,
+`MAIL_*`, `CORS_ORIGINS`, `LOG_CHANNEL` (`stdout`|`stderr`).
 
-Dev **7007**. Público `/api/v1/notifications/**`, `/api/v1/devices/**`. Interno (para n8n,
-UC-23): `/internal/v1/notifications` (envío dirigido) — **agregar al contrato antes de implementar**.
+## Endpoints
 
-## Contratos
-
-`bandadau-docs/contracts/openapi/notification-service.yaml`: `listNotifications`, `markNotificationRead`,
-`markAllNotificationsRead`, `registerDevice` (PUT), `unregisterDevice`, `getNotificationPreferences`,
-`updateNotificationPreferences`.
+Implementados: `listNotifications` (cursor, `unreadOnly`, cabecera `X-Unread-Count`), `markNotificationRead`,
+`markAllNotificationsRead`, `getNotificationPreferences`, `updateNotificationPreferences`, `registerDevice`,
+`unregisterDevice`, `sendNotification` (`/internal/v1/notifications`, `internal:write`, Idempotency-Key + `dedupeKey` 7 días),
+`/health/live`, `/health/ready`. Diferido: Web Push (se acepta la suscripción pero no se envía), exportador OTLP.
 
 ## Mensajería
 
-- **Consume** (`notification-service.events`): `bandada.events.registration.#`, `bandada.social.#`,
-  `bandada.wallet.topup.#`, `bandada.insights.alert.#`, `bandada.identity.user.registered.v1` y
-  `bandada.identity.user.preferences-changed.v1` (copia local de `locale`; **añadir binding al catálogo vía ADR**).
-- **Publica**: nada (servicio terminal).
+Consume `notification-service.events` (bindings del catálogo §5). Inbox `INBOX#<messageId>`/META (TTL 14 d) escrito con las
+notificaciones y el contador de no leídas en un solo `TransactWriteItems`. Un duplicado no crea nada y solo reanuda entregas
+`PENDING`. Agrupación de reacciones: 1 por post/30 min (`INBOX#group:...`). `user.registered` / `user.preferences-changed`
+mantienen la copia local `locale`+`email` en `PREF` (solo si el evento es más nuevo). Tipos desconocidos: se registra el inbox y se ignora.
 
-## Datos (DynamoDB `bandada-notifications`)
+## Decisiones / divergencias
 
-`pk = USER#<userId>` / `sk = NOTIF#<uuidv7>` (TTL 90 días), `sk = DEVICE#<token>`, `sk = PREF`
-(canales + `locale`). Inbox: ítem `pk = INBOX#<messageId>` / `sk = META` condicional (TTL 14 días).
-
-## Reglas específicas y gotchas
-
-- **Contenido por locale**: plantillas `resources/templates/{es,en}/…`; se usa el `locale` del
-  destinatario (copia local), nunca el del emisor. Fallback `es`.
-- La notificación in-app guarda `type` + `params` (no solo texto) para re-renderizar si cambia el idioma;
-  la API devuelve `title`/`body` renderizados según `Accept-Language`.
-- Eventos de dominio no traen textos: el servicio compone el mensaje.
-- Respetar preferencias por canal; tokens Expo inválidos (`DeviceNotRegistered`) se eliminan.
-- Emails solo en tema claro (D13). Nunca incluir contenido completo de posts en el email.
-- Problem Details localizados con `code` estable (`NOTIFICATION_NOT_FOUND`, `INVALID_DEVICE_TOKEN`).
-- Push en lote (límite de mensajes por petición de Expo: verificar) con reintento y backoff.
-
-## Casos de uso
-
-UC-24 (recibir notificaciones), UC-12 (confirmación/fallo), UC-07, UC-08, UC-09, UC-15, UC-18, UC-20,
-UC-23 (recordatorios), UC-01 (bienvenida, junto a n8n).
-
-## Definición de hecho
-
-`definition-of-done.md` §0, §2, §3 + Deptrac + prueba por `NotificationType` en `es` y `en` + evento duplicado.
+- Título/cuerpo se renderizan con el `locale` guardado de la notificación (OpenAPI), no con `Accept-Language`.
+- Enlaces profundos usan `APP_DEEP_LINK_BASE` (https), no `bandada://`.
+- `ALERT` solo notifica si el evento trae `recipientUserIds` (no está en el AsyncAPI); `WELCOME` es solo in-app (el email lo envía n8n).
+- Textos de comentarios/reacciones no incluyen nombre del actor (el evento no lo trae).
+- Preferencias: `ALERT` y `REGISTRATION_FAILED` no se pueden silenciar (422 `TYPE_NOT_MUTABLE`).
