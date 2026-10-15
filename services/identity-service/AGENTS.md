@@ -13,7 +13,7 @@ Es **upstream** de todos los contextos (Published Language: claims del JWT y
 
 ## Stack
 
-Java 25 · Spring Boot 4 (Web MVC, Security, Data JPA, Actuator, Validation) · Gradle
+Java 25 · Spring Boot 4.0.8 (Web MVC, Security + OAuth2 resource server, **Spring JDBC `JdbcClient`**, Actuator, Validation, AMQP, Mail) · Gradle
 Kotlin DSL · PostgreSQL 18 (`identity_db`) · Flyway · RabbitMQ (outbox) · OpenTelemetry ·
 JUnit 5 + Testcontainers + ArchUnit. Verificar versiones exactas y APIs de Spring Boot 4
 (Spring Framework 7, Jakarta EE 11) al implementar.
@@ -31,44 +31,16 @@ src/main/java/com/bandadau/identity/
 src/main/resources/{application.yml, db/migration, messages_es.properties, messages_en.properties}
 ```
 
-## Comandos (propuestos)
+## Comandos (verificados, todo en Docker)
 
 ```bash
-./gradlew bootRun                 # dev en :7001 (requiere make infra-up)
-./gradlew test                    # unit + integración (Testcontainers) + ArchUnit
-./gradlew spotlessApply spotlessCheck checkstyleMain
-./gradlew build                   # jar + pruebas
-./gradlew flywayInfo              # estado de migraciones
-docker build -t bandada/identity-service .
+make test-unit      # unitarias + ArchUnit (gradle:9-jdk25)
+make test-java      # + integración Testcontainers (monta /var/run/docker.sock, TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal)
+make image          # docker build (multi-stage, usuario no root, HEALTHCHECK curl /health/ready, 60% RAM)
 ```
 
-## Variables de entorno (`.env.example`)
-
-```
-PORT=7001
-DATABASE_URL=jdbc:postgresql://localhost:5432/identity_db
-DATABASE_USER=identity
-DATABASE_PASSWORD=change-me
-RABBITMQ_URL=amqp://bandada:bandada@localhost:5672
-JWT_ISSUER=http://api.bandada.localhost
-JWT_PRIVATE_KEY_PATH=./secrets/jwt-private.pem      # RS256; nunca en git
-JWT_KEY_ID=dev-2026-10
-ACCESS_TOKEN_TTL=PT15M
-REFRESH_TOKEN_TTL=P30D
-HANDOFF_CODE_TTL=PT60S
-APP_BASE_URL=http://app.bandada.localhost
-ADMIN_BASE_URL=http://admin.bandada.localhost
-SMTP_HOST=localhost
-SMTP_PORT=1025
-MAIL_FROM=no-reply@bandadau.com
-SERVICE_CLIENTS=admin-gateway:secret,insights-service:secret   # client credentials (dev)
-IDEMPOTENCY_TABLE=bandada-idempotency
-DYNAMODB_ENDPOINT=http://localhost:8000
-AWS_REGION=us-east-1
-DEFAULT_LOCALE=es
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-OTEL_SERVICE_NAME=identity-service
-```
+Variables: ver `.env.example` (validadas al arrancar por `config/StartupValidator`). Persistencia: JDBC explícito (SQL con `FOR UPDATE`,
+`RETURNING`, índices parciales) en lugar de JPA; las idempotency keys HTTP viven en Postgres (`idempotency_keys`), no en DynamoDB.
 
 ## Puertos y rutas
 
@@ -84,6 +56,17 @@ Dev **7001**. Público (Traefik): `/api/v1/auth/**`, `/api/v1/users/**`,
   `listUniversities`, `getJwks`, internos `searchUsers`, `updateUserRoles`,
   `updateUserStatus`, `createUniversity`, `updateUniversity`.
 - No consume APIs de otros servicios.
+
+## Decisiones de la fase 1
+
+- Claims del JWT (`seguridad-y-sso.md`): `iss`, `aud` (`bandada-app|bandada-admin|bandada-internal`), `sub`, `typ` (`user|service`), `roles`, `uni`, `locale`, `scope`, `jti`; header `kid`.
+  Token de servicio: `sub` = clientId, `scope` = `internal:read internal:write` (o los pedidos, intersectados con los permitidos del cliente).
+- `signing_keys`: clave RSA generada al primer arranque, cifrada con `JWT_KEK` (AES-GCM); si `JWT_PRIVATE_KEY_PATH` existe se importa, si no se exporta ahí el PEM generado.
+  Ciclo PENDING→ACTIVE→RETIRING→RETIRED (job diario, 90 d / 24 h).
+- Contrato manda sobre los UC: `registerUser` → 201, `INVALID_VERIFICATION_CODE` 422, `INVALID_REFRESH_TOKEN`, `HANDOFF_CODE_INVALID` 401; bloqueo de login → 429 `RATE_LIMITED` + `Retry-After`.
+- Registro de un correo ya activo: 409 `EMAIL_ALREADY_REGISTERED` (contrato); `REGISTER_HIDE_EXISTING_ACCOUNTS=true` aplica la anti-enumeración del UC-01 (201 + aviso por correo).
+- `displayName` de `user.registered` se deriva del correo (el contrato de registro no lo recibe).
+- Rate limit en memoria por IP en `/auth/*` y por correo/usuario en resend/handoff.
 
 ## Mensajería
 
