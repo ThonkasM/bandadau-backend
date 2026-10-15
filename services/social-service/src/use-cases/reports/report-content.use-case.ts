@@ -72,13 +72,13 @@ export class ReportContentUseCase {
   private async loadTarget(input: ReportContentInput): Promise<{ authorId: string; comment?: CommentProps }> {
     if (input.targetType === 'POST') {
       const post = await this.posts.findById(input.targetId);
-      if (!post || !(await this.access.canView(post, input.reporterId))) throw new DomainError('NOT_FOUND');
+      if (!post || !(await this.access.canView(post, input.reporterId))) throw new DomainError('POST_NOT_FOUND');
       return { authorId: post.authorId };
     }
     const comment = await this.comments.findById(input.targetId);
-    if (!comment || comment.status === 'REMOVED') throw new DomainError('NOT_FOUND');
+    if (!comment || comment.status === 'REMOVED') throw new DomainError('COMMENT_NOT_FOUND');
     const post = await this.posts.findById(comment.postId);
-    if (!post || !(await this.access.canView(post, input.reporterId))) throw new DomainError('NOT_FOUND');
+    if (!post || !(await this.access.canView(post, input.reporterId))) throw new DomainError('POST_NOT_FOUND');
     return { authorId: comment.authorId, comment };
   }
 }

@@ -13,7 +13,7 @@ export class GetPostUseCase {
 
   async execute(input: { postId: string; viewerId: string }): Promise<PostOutput> {
     const post = await this.posts.findById(input.postId);
-    if (!post || !(await this.access.canView(post, input.viewerId))) throw new DomainError('NOT_FOUND');
+    if (!post || !(await this.access.canView(post, input.viewerId))) throw new DomainError('POST_NOT_FOUND');
     const [output] = await this.assembler.assemble([post], input.viewerId);
     return output as PostOutput;
   }

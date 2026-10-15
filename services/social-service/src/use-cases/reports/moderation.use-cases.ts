@@ -33,6 +33,22 @@ export class ListPostsByStatusUseCase {
   }
 }
 
+/** Internal read of a post in any state (admin-gateway, D-6): no visibility filter. */
+export class GetPostInternalUseCase {
+  constructor(
+    private readonly posts: PostRepository,
+    private readonly assembler: PostAssembler,
+  ) {}
+
+  async execute(input: { postId: string }): Promise<ModerationPostOutput> {
+    const post = await this.posts.findById(input.postId);
+    if (!post) throw new DomainError('POST_NOT_FOUND');
+    const [assembled] = await this.assembler.assemble([post], null);
+    const output = assembled as PostOutput;
+    return { output, reportsCount: output.post.openReportsCount, hiddenReason: output.post.hiddenReason };
+  }
+}
+
 export class UpdatePostStatusUseCase {
   constructor(
     private readonly posts: PostRepository,
@@ -44,7 +60,7 @@ export class UpdatePostStatusUseCase {
 
   async execute(input: { postId: string; status: 'PUBLISHED' | 'HIDDEN' | 'REMOVED'; reason: string; actorId: string }): Promise<PostOutput> {
     const post = await this.posts.findById(input.postId);
-    if (!post) throw new DomainError('NOT_FOUND');
+    if (!post) throw new DomainError('POST_NOT_FOUND');
     const previous = post.status;
     const now = this.clock.now();
     if (post.moderate(input.status, now)) {

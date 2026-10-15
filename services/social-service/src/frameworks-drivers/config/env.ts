@@ -25,6 +25,8 @@ const schema = z.object({
   OUTBOX_POLL_MS: z.coerce.number().int().min(50).default(500),
   PENDING_MEDIA_SWEEP_MS: z.coerce.number().int().min(1000).default(60_000),
   MESSAGING_ENABLED: bool.default(true),
+  /** Require `internal:read|write` in service tokens on `/internal/v1/**` (D-7). */
+  INTERNAL_SCOPES_ENFORCED: bool.default(true),
 });
 
 export type Env = z.output<typeof schema>;

@@ -49,8 +49,7 @@ export function presentPost(o: PostOutput): S['Post'] {
 export const presentFeedItem = (i: FeedItemOutput): S['FeedItem'] => ({ post: presentPost(i.output), source: i.source, score: i.score });
 
 export function presentModerationPost(m: ModerationPostOutput): S['ModerationPost'] {
-  const reason = m.hiddenReason === 'AUTHOR_SUSPENDED' ? 'MODERATOR' : m.hiddenReason;
-  return { ...presentPost(m.output), reportsCount: m.reportsCount, hiddenReason: m.output.post.status === 'HIDDEN' ? ((reason ?? 'MODERATOR') as S['HiddenReason']) : null };
+  return { ...presentPost(m.output), reportsCount: m.reportsCount, hiddenReason: m.output.post.status === 'HIDDEN' ? ((m.hiddenReason ?? 'MODERATOR') as S['HiddenReason']) : null };
 }
 
 export function presentProfile(o: ProfileOutput): S['Profile'] {
@@ -64,6 +63,7 @@ export function presentProfile(o: ProfileOutput): S['Profile'] {
     bio: p.bio,
     interests: [...p.interests],
     avatarMediaId: p.avatarMediaId,
+    avatarStatus: p.avatarStatus,
     avatarUrl: o.avatarUrl,
     followersCount: o.followersCount,
     followingCount: o.followingCount,

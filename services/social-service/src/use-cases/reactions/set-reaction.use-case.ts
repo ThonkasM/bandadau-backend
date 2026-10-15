@@ -22,7 +22,7 @@ export class SetReactionUseCase {
 
   async execute(input: { postId: string; userId: string; type: ReactionType }): Promise<ReactionStateOutput> {
     const post = await this.posts.findById(input.postId);
-    if (!post || !post.isInteractable || !(await this.access.canView(post, input.userId))) throw new DomainError('NOT_FOUND');
+    if (!post || !post.isInteractable || !(await this.access.canView(post, input.userId))) throw new DomainError('POST_NOT_FOUND');
     const now = this.clock.now();
     await this.uow.run(async () => {
       const { previous } = await this.reactions.set(post.id, input.userId, input.type, now);
@@ -46,7 +46,7 @@ export class RemoveReactionUseCase {
   /** Idempotent: removing a reaction that does not exist is a no-op. No domain event (UC-07 B8). */
   async execute(input: { postId: string; userId: string }): Promise<void> {
     const post = await this.posts.findById(input.postId);
-    if (!post || !(await this.access.canView(post, input.userId))) throw new DomainError('NOT_FOUND');
+    if (!post || !(await this.access.canView(post, input.userId))) throw new DomainError('POST_NOT_FOUND');
     await this.uow.run(async () => {
       const removed = await this.reactions.remove(post.id, input.userId);
       if (removed) await this.posts.adjustReactionCounts(post.id, { remove: removed });

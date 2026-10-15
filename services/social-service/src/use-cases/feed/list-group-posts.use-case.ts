@@ -16,7 +16,7 @@ export class ListGroupPostsUseCase {
   async execute(input: { groupId: string; viewerId: string; cursor: KeysetCursor | null; limit?: number }): Promise<Page<PostOutput>> {
     const limit = input.limit ?? DEFAULT_LIMIT;
     const group = await this.groups.findById(input.groupId);
-    if (!group) throw new DomainError('NOT_FOUND');
+    if (!group) throw new DomainError('GROUP_NOT_FOUND', { resource: 'path' });
     if (group.isPrivate) {
       const membership = await this.memberships.find(input.groupId, input.viewerId);
       if (membership?.status !== 'ACTIVE') throw new DomainError('GROUP_MEMBERSHIP_REQUIRED');

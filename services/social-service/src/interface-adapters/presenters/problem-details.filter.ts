@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 
 import { DomainError } from '../../entities/errors/domain-error';
 import { newRequestContext, requestContext } from '../request-context';
-import { buildProblem, type BuildProblemInput, DOMAIN_STATUS, type Locale } from './problem-details';
+import { buildProblem, type BuildProblemInput, type Locale,statusOf } from './problem-details';
 
 export const LOGGER_TOKEN = Symbol('JsonLogger');
 
@@ -43,7 +43,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     let retryAfter: string | undefined;
 
     if (exception instanceof DomainError) {
-      status = DOMAIN_STATUS[exception.code];
+      status = statusOf(exception);
       const field = exception.meta.field as string | undefined;
       input = {
         ...base,

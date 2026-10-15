@@ -38,6 +38,32 @@ describe('profiles and auth', () => {
     expect(bad.status).toBe(400);
     expect(bad.body.errors[0]).toMatchObject({ field: 'bio', code: 'TOO_LONG' });
   });
+
+  it('exposes avatarStatus (null, PENDING while processing, APPROVED, REJECTED)', async () => {
+    expect((await h.http('GET', '/api/v1/profiles/me', { token: tokens.bob })).body.avatarStatus).toBeNull();
+    const m = uuidv7();
+    h.assets.set(m, { id: m, ownerId: users.bob, kind: 'IMAGE', purpose: 'AVATAR', status: 'PROCESSING' });
+    const pending = await h.http('PATCH', '/api/v1/profiles/me', { token: tokens.bob, body: { avatarMediaId: m } });
+    expect(pending.body).toMatchObject({ avatarStatus: 'PENDING', avatarMediaId: null });
+    const decide = h.app.get(ApplyMediaDecisionUseCase);
+    await decide.execute({ mediaId: m, ownerId: users.bob, kind: 'IMAGE', status: 'REJECTED' });
+    expect((await h.http('GET', '/api/v1/profiles/me', { token: tokens.bob })).body).toMatchObject({ avatarStatus: 'REJECTED', avatarMediaId: null });
+    const ok = uuidv7();
+    h.assets.set(ok, { id: ok, ownerId: users.bob, kind: 'IMAGE', purpose: 'AVATAR', status: 'APPROVED' });
+    expect((await h.http('PATCH', '/api/v1/profiles/me', { token: tokens.bob, body: { avatarMediaId: ok } })).body).toMatchObject({ avatarStatus: 'APPROVED', avatarMediaId: ok });
+  });
+
+  it('404s carry domain codes (PROFILE/POST/COMMENT/GROUP_NOT_FOUND)', async () => {
+    const missing = uuidv7();
+    expect((await h.http('GET', `/api/v1/profiles/${missing}`, { token: tokens.ana })).body.code).toBe('PROFILE_NOT_FOUND');
+    expect((await h.http('GET', `/api/v1/posts/${missing}`, { token: tokens.ana })).body.code).toBe('POST_NOT_FOUND');
+    expect((await h.http('GET', `/api/v1/posts/${missing}/comments`, { token: tokens.ana })).body.code).toBe('POST_NOT_FOUND');
+    const g = await h.http('GET', `/api/v1/groups/${missing}`, { token: tokens.ana });
+    expect(g.status).toBe(404);
+    expect(g.body.code).toBe('GROUP_NOT_FOUND');
+    const rep = await h.http('POST', '/api/v1/reports', { token: tokens.ana, body: { targetType: 'COMMENT', targetId: missing, reason: 'SPAM' }, headers: key() });
+    expect(rep.body.code).toBe('COMMENT_NOT_FOUND');
+  });
 });
 
 describe('createPost', () => {
@@ -127,6 +153,23 @@ describe('reports', () => {
     expect(r.body.status).toBe('RESOLVED_REMOVED');
     expect((await h.http('GET', '/internal/v1/reports?status=OPEN', { token: svc })).body.items.length).toBe(0);
     expect((await h.http('GET', '/internal/v1/posts?status=HIDDEN', { token: await h.userToken(uuidv7()) })).status).toBe(401);
+  });
+
+  it('/internal: getPostInternal in any state, AUTHOR_SUSPENDED kept, scopes enforced', async () => {
+    const svc = await h.serviceToken();
+    const post = await h.http('POST', '/api/v1/posts', { token: tokens.eva, body: { clientId: uuidv7(), text: 'interno', mediaIds: [], visibility: 'PUBLIC' }, headers: key() });
+    await h.mongo.db(h.db).collection('posts').updateOne({ _id: post.body.id as never }, { $set: { status: 'HIDDEN', hiddenReason: 'AUTHOR_SUSPENDED' } });
+    const r = await h.http('GET', `/internal/v1/posts/${post.body.id}`, { token: svc });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ id: post.body.id, status: 'HIDDEN', hiddenReason: 'AUTHOR_SUSPENDED', author: { userId: users.eva } });
+    const missing = await h.http('GET', `/internal/v1/posts/${uuidv7()}`, { token: svc });
+    expect(missing.status).toBe(404);
+    expect(missing.body.code).toBe('POST_NOT_FOUND');
+    const readOnly = await h.serviceToken('internal:read');
+    expect((await h.http('GET', `/internal/v1/posts/${post.body.id}`, { token: readOnly })).status).toBe(200);
+    const denied = await h.http('PATCH', `/internal/v1/posts/${post.body.id}/status`, { token: readOnly, body: { status: 'PUBLISHED', reason: 'x' }, headers: { 'x-actor-id': uuidv7() } });
+    expect(denied.status).toBe(403);
+    expect((await h.http('GET', `/internal/v1/posts/${post.body.id}`, { token: await h.serviceToken('') })).status).toBe(403);
   });
 });
 

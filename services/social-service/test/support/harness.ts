@@ -24,7 +24,7 @@ export interface Harness {
   db: string;
   assets: Map<string, MockAsset>;
   userToken(userId: string): Promise<string>;
-  serviceToken(): Promise<string>;
+  serviceToken(scope?: string): Promise<string>;
   http(method: string, path: string, opts?: { token?: string; body?: unknown; headers?: Record<string, string> }): Promise<{ status: number; body: any; headers: Headers }>;
   mongo: MongoClient;
   stop(): Promise<void>;
@@ -40,7 +40,7 @@ export async function startHarness(): Promise<Harness> {
   const sign = (claims: Record<string, unknown>, aud: string, sub: string) =>
     new SignJWT(claims).setProtectedHeader({ alg: 'RS256', kid: 'test' }).setIssuer('http://test-issuer').setAudience(aud).setSubject(sub).setIssuedAt().setExpirationTime('10m').setJti(uuidv7()).sign(privateKey);
   const userToken = (id: string) => sign({ typ: 'user', roles: ['STUDENT'] }, 'bandada-app', id);
-  const serviceToken = () => sign({ typ: 'service', scope: 'internal:read internal:write' }, 'bandada-internal', 'admin-gateway');
+  const serviceToken = (scope = 'internal:read internal:write') => sign({ typ: 'service', scope }, 'bandada-internal', 'admin-gateway');
 
   const assets = new Map<string, MockAsset>();
   let mockUrl = '';

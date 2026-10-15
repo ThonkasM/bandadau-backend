@@ -8,6 +8,9 @@ export type Locale = 'es' | 'en';
 /** HTTP status of each business error code (contract-first: see the `responses` of every operation). */
 export const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   NOT_FOUND: 404,
+  POST_NOT_FOUND: 404,
+  COMMENT_NOT_FOUND: 404,
+  PROFILE_NOT_FOUND: 404,
   FORBIDDEN: 403,
   GROUP_MEMBERSHIP_REQUIRED: 403,
   VALIDATION_FAILED: 400,
@@ -30,6 +33,10 @@ export const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   DUPLICATE_CLIENT_ID: 409,
   SERVICE_UNAVAILABLE: 503,
 };
+
+/** `GROUP_NOT_FOUND` is 404 for a group addressed by the path and 422 for a `groupId` referenced in a `createPost` body. */
+export const statusOf = (error: { code: DomainErrorCode; meta: Record<string, unknown> }): number =>
+  error.code === 'GROUP_NOT_FOUND' && error.meta.resource === 'path' ? 404 : DOMAIN_STATUS[error.code];
 
 const TITLES: Record<number, Record<Locale, string>> = {
   400: { es: 'Datos inválidos', en: 'Invalid data' },
@@ -85,7 +92,7 @@ export function buildProblem(input: BuildProblemInput): ProblemDetails {
 
 /** Storable form of a DomainError for the idempotency store (re-localized on replay by the filter). */
 export function domainErrorBody(error: { code: DomainErrorCode; meta: Record<string, unknown> }): { status: number; body: Record<string, unknown> } {
-  const status = DOMAIN_STATUS[error.code];
+  const status = statusOf(error);
   const field = error.meta.field as string | undefined;
   return {
     status,

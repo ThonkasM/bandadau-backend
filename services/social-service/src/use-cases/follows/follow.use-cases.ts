@@ -17,7 +17,7 @@ export class FollowUserUseCase {
   async execute(input: { followerId: string; followeeId: string }): Promise<FollowProps> {
     const now = this.clock.now();
     const candidate = newFollow(input.followerId, input.followeeId, now);
-    if (!(await this.profiles.findById(input.followeeId))) throw new DomainError('NOT_FOUND');
+    if (!(await this.profiles.findById(input.followeeId))) throw new DomainError('PROFILE_NOT_FOUND');
     return this.uow.run(async () => {
       const { follow, created } = await this.follows.insertIfAbsent(candidate);
       if (created) await this.events.publish(SocialEvents.followCreated(input.followerId, input.followeeId, now));
@@ -33,7 +33,7 @@ export class UnfollowUserUseCase {
   ) {}
 
   async execute(input: { followerId: string; followeeId: string }): Promise<void> {
-    if (!(await this.profiles.findById(input.followeeId))) throw new DomainError('NOT_FOUND');
+    if (!(await this.profiles.findById(input.followeeId))) throw new DomainError('PROFILE_NOT_FOUND');
     await this.follows.delete(input.followerId, input.followeeId);
   }
 }

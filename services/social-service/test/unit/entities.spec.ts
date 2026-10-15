@@ -2,6 +2,7 @@ import { DomainError } from '../../src/entities/errors/domain-error';
 import { recencyScore } from '../../src/entities/policies/feed-recency.policy';
 import { shouldAutoHide } from '../../src/entities/policies/report.policy';
 import { Post } from '../../src/entities/post.entity';
+import { Profile } from '../../src/entities/profile.entity';
 import type { MediaAssetView } from '../../src/entities/value-objects/media';
 import { extractHashtags } from '../../src/entities/value-objects/post-text';
 
@@ -61,5 +62,28 @@ describe('policies', () => {
     expect(recencyScore(now, now)).toBe(1);
     expect(recencyScore(new Date(now.getTime() - 36 * 3_600_000), now)).toBe(0.5);
     expect(recencyScore(new Date(now.getTime() - 100 * 3_600_000), now)).toBe(0);
+  });
+});
+
+describe('Profile.avatarStatus', () => {
+  const fresh = () => Profile.register({ userId: A, displayName: 'Ana' }, now);
+  it('is null without avatar, PENDING while under review, APPROVED once promoted', () => {
+    const p = fresh();
+    expect(p.snapshot.avatarStatus).toBeNull();
+    p.setPendingAvatar('m1', now);
+    expect(p.snapshot.avatarStatus).toBe('PENDING');
+    expect(p.snapshot.avatarMediaId).toBeNull();
+    p.promoteAvatar(now);
+    expect(p.snapshot).toMatchObject({ avatarStatus: 'APPROVED', avatarMediaId: 'm1', pendingAvatarMediaId: null });
+  });
+  it('is REJECTED when the pending asset is discarded (previous avatar kept) and null when removed', () => {
+    const p = fresh();
+    p.setPendingAvatar('m1', now);
+    p.promoteAvatar(now);
+    p.setPendingAvatar('m2', now);
+    p.discardPendingAvatar(now);
+    expect(p.snapshot).toMatchObject({ avatarStatus: 'REJECTED', avatarMediaId: 'm1' });
+    p.setPendingAvatar(null, now);
+    expect(p.snapshot).toMatchObject({ avatarStatus: null, avatarMediaId: null });
   });
 });

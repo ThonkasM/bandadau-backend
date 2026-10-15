@@ -1,3 +1,5 @@
+export type AvatarStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
 export interface ProfileProps {
   userId: string;
   displayName: string;
@@ -8,6 +10,8 @@ export interface ProfileProps {
   interests: string[];
   avatarMediaId: string | null;
   pendingAvatarMediaId: string | null;
+  /** Review state of the avatar (null = no avatar and no upload). REJECTED keeps the previous `avatarMediaId`, if any. */
+  avatarStatus: AvatarStatus | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +42,7 @@ export class Profile {
       interests: [],
       avatarMediaId: null,
       pendingAvatarMediaId: null,
+      avatarStatus: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -60,8 +65,10 @@ export class Profile {
     if (mediaId === null) {
       this.props.avatarMediaId = null;
       this.props.pendingAvatarMediaId = null;
+      this.props.avatarStatus = null;
     } else {
       this.props.pendingAvatarMediaId = mediaId;
+      this.props.avatarStatus = 'PENDING';
     }
     this.props.updatedAt = now;
   }
@@ -70,6 +77,7 @@ export class Profile {
     if (!this.props.pendingAvatarMediaId) return false;
     this.props.avatarMediaId = this.props.pendingAvatarMediaId;
     this.props.pendingAvatarMediaId = null;
+    this.props.avatarStatus = 'APPROVED';
     this.props.updatedAt = now;
     return true;
   }
@@ -77,6 +85,7 @@ export class Profile {
   discardPendingAvatar(now: Date): boolean {
     if (!this.props.pendingAvatarMediaId) return false;
     this.props.pendingAvatarMediaId = null;
+    this.props.avatarStatus = 'REJECTED';
     this.props.updatedAt = now;
     return true;
   }

@@ -74,7 +74,7 @@ export class GetGroupUseCase {
 
   async execute(input: { groupId: string; userId: string }): Promise<GroupOutput> {
     const group = await this.groups.findById(input.groupId);
-    if (!group) throw new DomainError('NOT_FOUND');
+    if (!group) throw new DomainError('GROUP_NOT_FOUND', { resource: 'path' });
     return { group: group.snapshot, myMembership: mine(await this.memberships.find(group.id, input.userId)) };
   }
 }
@@ -90,7 +90,7 @@ export class JoinGroupUseCase {
 
   async execute(input: { groupId: string; userId: string }): Promise<MembershipProps> {
     const group = await this.groups.findById(input.groupId);
-    if (!group) throw new DomainError('NOT_FOUND');
+    if (!group) throw new DomainError('GROUP_NOT_FOUND', { resource: 'path' });
     const now = this.clock.now();
     const status = initialMembershipStatus(group.privacy);
 
@@ -125,7 +125,7 @@ export class ListGroupMembersUseCase {
     const limit = input.limit ?? DEFAULT_LIMIT;
     const status = input.status ?? 'ACTIVE';
     const group = await this.groups.findById(input.groupId);
-    if (!group) throw new DomainError('NOT_FOUND');
+    if (!group) throw new DomainError('GROUP_NOT_FOUND', { resource: 'path' });
     const requester = await this.memberships.find(group.id, input.userId);
     if (status === 'ACTIVE') {
       if (requester?.status !== 'ACTIVE') throw new DomainError('GROUP_MEMBERSHIP_REQUIRED');
@@ -150,7 +150,7 @@ export class ReviewGroupMemberUseCase {
   /** `approve`: PENDING -> ACTIVE (+1 member). `reject`: PENDING -> REJECTED. Repeating the same decision answers 200 unchanged. */
   async execute(input: { groupId: string; actorId: string; targetUserId: string; decision: 'approve' | 'reject' }): Promise<MembershipProps> {
     const group = await this.groups.findById(input.groupId);
-    if (!group) throw new DomainError('NOT_FOUND');
+    if (!group) throw new DomainError('GROUP_NOT_FOUND', { resource: 'path' });
     if (!canManageMembers(await this.memberships.find(group.id, input.actorId))) throw new DomainError('FORBIDDEN');
     const target = await this.memberships.find(group.id, input.targetUserId);
     if (!target) throw new DomainError('NOT_FOUND');
@@ -180,7 +180,7 @@ export class LeaveGroupUseCase {
 
   async execute(input: { groupId: string; userId: string }): Promise<MembershipProps> {
     const group = await this.groups.findById(input.groupId);
-    if (!group) throw new DomainError('NOT_FOUND');
+    if (!group) throw new DomainError('GROUP_NOT_FOUND', { resource: 'path' });
     const current = await this.memberships.find(group.id, input.userId);
     if (!current) throw new DomainError('NOT_FOUND');
     if (current.status === 'LEFT' || current.status === 'REJECTED') return current;

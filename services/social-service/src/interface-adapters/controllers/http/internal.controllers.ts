@@ -1,11 +1,12 @@
 import { Internal } from '@bandada/auth-ts/nest';
-import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import type { z } from 'zod';
 
 import { ListGroupsInternalUseCase } from '../../../use-cases/groups/group.use-cases';
 import { GetProfileUseCase } from '../../../use-cases/profiles/profile.use-cases';
 import { GetContentDailyStatsUseCase } from '../../../use-cases/reports/daily-stats.use-case';
 import {
+  GetPostInternalUseCase,
   ListContentReportsUseCase,
   ListPostsByStatusUseCase,
   ResolveContentReportUseCase,
@@ -24,16 +25,19 @@ import {
   uuidParam,
 } from './dto/schemas';
 import { ZodValidationPipe } from './dto/zod-validation.pipe';
+import { InternalScopesGuard } from './internal-scopes.guard';
 
 type In<S extends z.ZodType> = z.output<S>;
 const actor = new ZodValidationPipe(actorHeader, 'X-Actor-Id');
 
 /** Service-to-service API (`/internal/v1`), blocked at Traefik and guarded with a service token. */
 @Controller('internal/v1')
+@UseGuards(InternalScopesGuard) // declared above @Internal(): runs after ServiceAuthGuard, which sets `request.user`
 @Internal()
 export class InternalController {
   constructor(
     @Inject(ListPostsByStatusUseCase) private readonly postsByStatus: ListPostsByStatusUseCase,
+    @Inject(GetPostInternalUseCase) private readonly getPost: GetPostInternalUseCase,
     @Inject(UpdatePostStatusUseCase) private readonly updateStatus: UpdatePostStatusUseCase,
     @Inject(ListContentReportsUseCase) private readonly reports: ListContentReportsUseCase,
     @Inject(ResolveContentReportUseCase) private readonly resolve: ResolveContentReportUseCase,
@@ -45,6 +49,11 @@ export class InternalController {
   @Get('posts')
   async listPostsByStatus(@Query(new ZodValidationPipe(postsByStatusQuery)) q: In<typeof postsByStatusQuery>) {
     return page(await this.postsByStatus.execute({ status: q.status, cursor: decodeCursor(q.cursor), limit: q.limit }), presentModerationPost);
+  }
+
+  @Get('posts/:postId')
+  async getPostInternal(@Param('postId', new ZodValidationPipe(uuidParam, 'postId')) postId: string) {
+    return presentModerationPost(await this.getPost.execute({ postId }));
   }
 
   @Patch('posts/:postId/status')

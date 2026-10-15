@@ -36,6 +36,8 @@ const toProfile = (d: Document): Profile =>
     interests: d.interests ?? [],
     avatarMediaId: d.avatarMediaId ?? null,
     pendingAvatarMediaId: d.pendingAvatarMediaId ?? null,
+    // Documents written before avatarStatus existed: derive it from the avatar fields.
+    avatarStatus: d.avatarStatus ?? (d.pendingAvatarMediaId ? 'PENDING' : d.avatarMediaId ? 'APPROVED' : null),
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
   });

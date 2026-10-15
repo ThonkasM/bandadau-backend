@@ -17,7 +17,7 @@ export class ListCommentsUseCase {
   async execute(input: { postId: string; viewerId: string; cursor: KeysetCursor | null; limit?: number }): Promise<Page<CommentOutput>> {
     const limit = input.limit ?? DEFAULT_LIMIT;
     const post = await this.posts.findById(input.postId);
-    if (!post || !(await this.access.canView(post, input.viewerId))) throw new DomainError('NOT_FOUND');
+    if (!post || !(await this.access.canView(post, input.viewerId))) throw new DomainError('POST_NOT_FOUND');
     const rows = await this.comments.list(post.id, input.viewerId, input.cursor, limit + 1);
     const page = paginate(rows, limit, (c) => ({ createdAt: c.createdAt, id: c.id }));
     const authors = await this.assembler.summaries(page.items.map((c) => c.authorId));

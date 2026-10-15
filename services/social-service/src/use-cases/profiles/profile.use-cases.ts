@@ -22,7 +22,7 @@ export class ProfileReader {
 
   async read(userId: string, viewerId: string | null): Promise<ProfileOutput> {
     const profile = await this.profiles.findById(userId);
-    if (!profile) throw new DomainError('NOT_FOUND');
+    if (!profile) throw new DomainError('PROFILE_NOT_FOUND');
     const [followersCount, followingCount, postsCount, followedByMe, avatarUrl] = await Promise.all([
       this.follows.countFollowers(userId),
       this.follows.countFollowing(userId),
@@ -59,7 +59,7 @@ export class UpdateMyProfileUseCase {
 
   async execute(input: UpdateProfileInput): Promise<ProfileOutput> {
     const profile = await this.profiles.findById(input.userId);
-    if (!profile) throw new DomainError('NOT_FOUND');
+    if (!profile) throw new DomainError('PROFILE_NOT_FOUND');
     const now = this.clock.now();
     const { userId, avatarMediaId, ...patch } = input;
     profile.update(patch, now);

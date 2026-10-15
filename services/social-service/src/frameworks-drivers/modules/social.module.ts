@@ -2,6 +2,7 @@ import { Inject, Injectable, Module, type OnApplicationBootstrap, type OnApplica
 
 import { HealthController } from '../../interface-adapters/controllers/http/health.controller';
 import { InternalController } from '../../interface-adapters/controllers/http/internal.controllers';
+import { INTERNAL_SCOPES_OPTIONS } from '../../interface-adapters/controllers/http/internal-scopes.guard';
 import { FeedController, FollowsController, GroupsController, PostsController, ProfilesController, ReportsController } from '../../interface-adapters/controllers/http/social.controllers';
 import { IdentityEventsConsumer, MediaEventsConsumer } from '../../interface-adapters/controllers/messaging/events.consumers';
 import { MongoContext } from '../../interface-adapters/gateways/mongo/mongo-context';
@@ -62,7 +63,7 @@ import { PostAssembler } from '../../use-cases/posts/post-assembler';
 import { GetProfileUseCase, ProfileReader, UpdateMyProfileUseCase } from '../../use-cases/profiles/profile.use-cases';
 import { RemoveReactionUseCase, SetReactionUseCase } from '../../use-cases/reactions/set-reaction.use-case';
 import { GetContentDailyStatsUseCase } from '../../use-cases/reports/daily-stats.use-case';
-import { ListContentReportsUseCase, ListPostsByStatusUseCase, ResolveContentReportUseCase, UpdatePostStatusUseCase } from '../../use-cases/reports/moderation.use-cases';
+import { GetPostInternalUseCase, ListContentReportsUseCase, ListPostsByStatusUseCase, ResolveContentReportUseCase, UpdatePostStatusUseCase } from '../../use-cases/reports/moderation.use-cases';
 import { ReportContentUseCase } from '../../use-cases/reports/report-content.use-case';
 import type { Env } from '../config/env';
 import { ENV, LOGGER, REPORT_THRESHOLD } from './tokens';
@@ -116,6 +117,7 @@ const repo = <T>(token: symbol, cls: new (ctx: MongoContext) => T) => ({ provide
     repo(REPORT_REPOSITORY, MongoReportRepository),
     repo(MEDIA_VIEW_REPOSITORY, MongoMediaAssetViewRepository),
     repo(STATS_REPOSITORY, MongoContentStatsRepository),
+    { provide: INTERNAL_SCOPES_OPTIONS, inject: [ENV], useFactory: (env: Env) => ({ enforced: env.INTERNAL_SCOPES_ENFORCED }) },
     { provide: REPORT_THRESHOLD, inject: [ENV], useFactory: (env: Env) => env.REPORT_HIDE_THRESHOLD },
 
     factory(PostAssembler, PROFILE_REPOSITORY, REACTION_REPOSITORY, MEDIA_VIEW_REPOSITORY, MEDIA_GATEWAY),
@@ -146,6 +148,7 @@ const repo = <T>(token: symbol, cls: new (ctx: MongoContext) => T) => ({ provide
     factory(LeaveGroupUseCase, GROUP_REPOSITORY, MEMBERSHIP_REPOSITORY, UNIT_OF_WORK, CLOCK),
     factory(ReportContentUseCase, POST_REPOSITORY, COMMENT_REPOSITORY, REPORT_REPOSITORY, PostAccess, EVENT_PUBLISHER, UNIT_OF_WORK, ID_GENERATOR, CLOCK, REPORT_THRESHOLD),
     factory(ListPostsByStatusUseCase, POST_REPOSITORY, PostAssembler),
+    factory(GetPostInternalUseCase, POST_REPOSITORY, PostAssembler),
     factory(UpdatePostStatusUseCase, POST_REPOSITORY, PostAssembler, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
     factory(ListContentReportsUseCase, REPORT_REPOSITORY),
     factory(ResolveContentReportUseCase, REPORT_REPOSITORY, POST_REPOSITORY, COMMENT_REPOSITORY, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),

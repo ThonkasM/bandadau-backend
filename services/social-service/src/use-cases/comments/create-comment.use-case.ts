@@ -25,12 +25,12 @@ export class CreateCommentUseCase {
 
   async execute(input: { postId: string; authorId: string; text: string; parentId?: string | null }): Promise<CommentOutput> {
     const post = await this.posts.findById(input.postId);
-    if (!post || !(await this.access.canView(post, input.authorId))) throw new DomainError('NOT_FOUND');
+    if (!post || !(await this.access.canView(post, input.authorId))) throw new DomainError('POST_NOT_FOUND');
     if (!post.isInteractable) throw new DomainError('POST_NOT_PUBLISHED');
 
     if (input.parentId) {
       const parent = await this.comments.findById(input.parentId);
-      if (!parent || parent.postId !== post.id || parent.status === 'REMOVED') throw new DomainError('NOT_FOUND');
+      if (!parent || parent.postId !== post.id || parent.status === 'REMOVED') throw new DomainError('COMMENT_NOT_FOUND');
       if (parent.parentId) throw new DomainError('VALIDATION_FAILED', { field: 'parentId', code: 'INVALID_VALUE' });
     }
 

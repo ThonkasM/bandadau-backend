@@ -15,9 +15,9 @@ export class DeletePostUseCase {
   /** Idempotent: deleting a REMOVED post is a no-op. */
   async execute(input: { postId: string; userId: string }): Promise<void> {
     const post = await this.posts.findById(input.postId);
-    if (!post) throw new DomainError('NOT_FOUND');
+    if (!post) throw new DomainError('POST_NOT_FOUND');
     if (post.authorId !== input.userId) {
-      throw new DomainError((await this.access.canView(post, input.userId)) ? 'FORBIDDEN' : 'NOT_FOUND');
+      throw new DomainError((await this.access.canView(post, input.userId)) ? 'FORBIDDEN' : 'POST_NOT_FOUND');
     }
     const previous = post.status;
     const now = this.clock.now();

@@ -1,5 +1,8 @@
 export type DomainErrorCode =
   | 'NOT_FOUND'
+  | 'POST_NOT_FOUND'
+  | 'COMMENT_NOT_FOUND'
+  | 'PROFILE_NOT_FOUND'
   | 'FORBIDDEN'
   | 'EMPTY_POST'
   | 'VALIDATION_FAILED'
