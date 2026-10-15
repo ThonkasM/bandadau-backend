@@ -26,8 +26,8 @@ export interface GatewayContext {
   partialErrors: GraphQLError[];
 }
 
-/** Pages of 100 sagas scanned to find the saga of a registration. */
-const SAGA_PAGES = 5;
+/** Pages of 50 sagas (max `limit` of the contract) scanned to find the saga of a registration. */
+const SAGA_PAGES = 10;
 
 /** DataLoaders live as long as one request: never share them between users. */
 export function createLoaders(ds: DataSources, call: CallContext, options: { cache?: boolean } = {}): Loaders {
@@ -51,7 +51,7 @@ export function createLoaders(ds: DataSources, call: CallContext, options: { cac
       const all: SagaDto[] = [];
       let cursor: string | undefined;
       for (let i = 0; i < SAGA_PAGES; i++) {
-        const page = await ds.events.listSagas(call, { cursor, limit: 100 });
+        const page = await ds.events.listSagas(call, { cursor, limit: 50 });
         all.push(...page.items);
         if (!page.nextCursor) break;
         cursor = page.nextCursor;

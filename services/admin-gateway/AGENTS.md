@@ -96,7 +96,7 @@ Dev **7010**. `/graphql` (POST + WebSocket `graphql-ws`; token en cabecera `Auth
   (2) `suspendUser.until` se **retiró** del contrato (GraphQL 1.3.0): identity no tiene suspensión temporal; (3) `User.suspendedAt/suspensionReason` solo se
   muestran si identity los incluye en `/internal/v1/users` (hoy no: pendiente en identity; tras suspender en la misma petición se rellenan con el motivo enviado);
   (4) `event(id)` usa `GET /internal/v1/events/{id}` y `ContentReport.post` usa `GET /internal/v1/posts/{id}` (D-6, token de servicio; los reportes de `COMMENT` devuelven
-  `post = null` porque no hay endpoint interno de comentario); (5) `Registration.saga` busca la SAGA en las 500 más recientes (5 páginas de 100; no hay filtro
+  `post = null` porque no hay endpoint interno de comentario); (5) `Registration.saga` busca la SAGA en las 500 más recientes (10 páginas de 50; no hay filtro
   `registrationId` en `listSagas`); (6) el AGENTS original hablaba de `X-Acting-User`: el contrato usa `X-Actor-Id`; (7) la cola `admin-gateway.subscriptions.<id>` no figura aún
   en el catálogo (ADR pendiente) y el usuario RabbitMQ del gateway debe poder declararla; (8) los eventos de moderación no traen el contenido completo, así que el `item`
   de la suscripción es mínimo (el cliente refresca con `moderationQueue`).
