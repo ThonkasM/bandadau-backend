@@ -59,7 +59,9 @@ export class ListGroupsInternalUseCase {
   constructor(private readonly groups: GroupRepository) {}
 
   async execute(input: { career?: string; limit?: number; offset?: number }): Promise<GroupOutput[]> {
-    const rows = input.career ? await this.groups.listPublicByCareer(input.career, input.limit ?? DEFAULT_LIMIT, input.offset ?? 0) : [];
+    const limit = input.limit ?? DEFAULT_LIMIT;
+    const offset = input.offset ?? 0;
+    const rows = input.career ? await this.groups.listPublicByCareer(input.career, limit, offset) : await this.groups.listLargestPublic(limit, offset);
     return rows.map((g) => ({ group: g.snapshot, myMembership: null }));
   }
 }

@@ -11,6 +11,8 @@ export interface GroupRepository {
   search(query: string | undefined, cursor: KeysetCursor | null, limit: number): Promise<Group[]>;
   /** PUBLIC groups with most ACTIVE members among members of `career` (internal). */
   listPublicByCareer(career: string, limit: number, offset: number): Promise<Group[]>;
+  /** PUBLIC groups with the most members, regardless of career (internal). */
+  listLargestPublic(limit: number, offset: number): Promise<Group[]>;
   incrementMembers(groupId: string, delta: number): Promise<void>;
 }
 

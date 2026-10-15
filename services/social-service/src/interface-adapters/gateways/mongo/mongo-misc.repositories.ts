@@ -263,6 +263,16 @@ export class MongoGroupRepository implements GroupRepository {
     return rows.map((r) => toGroup(r.g as Document));
   }
 
+  async listLargestPublic(limit: number, offset: number): Promise<Group[]> {
+    const rows = await this.col
+      .find({ privacy: 'PUBLIC' }, this.ctx.opts)
+      .sort({ membersCount: -1, _id: 1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray();
+    return rows.map(toGroup);
+  }
+
   async incrementMembers(groupId: string, delta: number): Promise<void> {
     await this.col.updateOne({ _id: groupId as never }, { $inc: { membersCount: delta } }, this.ctx.opts);
   }
