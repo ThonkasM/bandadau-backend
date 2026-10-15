@@ -43,6 +43,11 @@ export class S3ObjectStorage implements ObjectStorage, ThumbnailGenerator {
     }
   }
 
+  async readHead(key: string, length: number): Promise<Uint8Array> {
+    const object = await this.internal.send(new GetObjectCommand({ Bucket: this.o.bucket, Key: key, Range: `bytes=0-${Math.max(length, 1) - 1}` }));
+    return (object.Body as { transformToByteArray(): Promise<Uint8Array> }).transformToByteArray();
+  }
+
   async delete(keys: readonly string[]): Promise<void> {
     if (keys.length === 0) return;
     await this.internal.send(new DeleteObjectsCommand({ Bucket: this.o.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));

@@ -13,6 +13,8 @@ export interface ObjectStorage {
   presignDownload(key: string, ttlSeconds: number): Promise<string>;
   /** HeadObject; null when the object does not exist. */
   head(key: string): Promise<{ size: number; contentType: string | undefined } | null>;
+  /** First `length` bytes of the object (ranged GET); used to verify magic bytes. */
+  readHead(key: string, length: number): Promise<Uint8Array>;
   delete(keys: readonly string[]): Promise<void>;
   /** Downloads the whole object (<= MAX_VIDEO_BYTES). */
   get(key: string): Promise<Buffer>;

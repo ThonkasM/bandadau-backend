@@ -27,7 +27,7 @@ src/
 - El cliente sube **directo** a S3; las URLs se firman con `S3_PUBLIC_ENDPOINT` (el host entra en la firma), las llamadas de datos usan `S3_ENDPOINT`.
 - `completeUpload` responde 202: HeadObject (existe/tamaño/tipo → `UPLOAD_MISSING|UPLOAD_MISMATCH|UPLOAD_EXPIRED`), CAS `PENDING_UPLOAD→PROCESSING` y un worker en proceso (`ProcessingWorker`)
   genera la miniatura, llama al `ModerationPort` y publica el evento por outbox en la misma transacción. Un barrido re-encola `PROCESSING` >`STALE_PROCESSING_MS` y purga `PENDING_UPLOAD` >24 h.
-- Los magic bytes del objeto no se verifican en fase 1 (solo `Content-Type` y tamaño de HeadObject).
+- Magic bytes (D-12): tras HeadObject, `completeUpload` lee los primeros 32 bytes (GET con `Range`) y `matchesDeclaredMime` (`entities/magic-bytes.ts`) comprueba PNG/JPEG/WebP/GIF/HEIC/MP4/QuickTime; si no coinciden → `422 MEDIA_CONTENT_MISMATCH` y el medio sigue `PENDING_UPLOAD` (sin evento).
 
 ## Comandos (proyecto independiente: `corepack pnpm`, pnpm@10.34.7)
 

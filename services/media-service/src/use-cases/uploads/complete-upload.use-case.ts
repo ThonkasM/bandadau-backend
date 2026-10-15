@@ -1,4 +1,5 @@
 import { DomainError } from '../../entities/errors/domain-error';
+import { MAGIC_BYTES_LENGTH, matchesDeclaredMime } from '../../entities/magic-bytes';
 import { withUrls } from '../media-urls';
 import type { MediaOutput } from '../outputs';
 import type { Clock, MediaRepository, ObjectStorage } from '../ports';
@@ -25,6 +26,9 @@ export class CompleteUploadUseCase {
     if (asset.status === 'PENDING_UPLOAD') {
       const now = this.clock.now();
       asset.verifyUpload(await this.storage.head(asset.snapshot.storageKey), now);
+      // D-12: the real bytes must agree with the declared Content-Type (HeadObject only trusts what the client sent).
+      const head = await this.storage.readHead(asset.snapshot.storageKey, MAGIC_BYTES_LENGTH);
+      if (!matchesDeclaredMime(head, asset.snapshot.mimeType)) throw new DomainError('MEDIA_CONTENT_MISMATCH');
       asset.startProcessing(now);
       if (await this.media.save(asset, ['PENDING_UPLOAD'])) this.queue.enqueue(asset.id);
     }

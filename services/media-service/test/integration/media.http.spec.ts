@@ -106,6 +106,21 @@ describe('completeUpload (allow-all)', () => {
     const mismatch = await auto.http('POST', `/api/v1/media/${t.body.mediaId}/complete`, { token });
     expect(mismatch.body.code).toBe('UPLOAD_MISMATCH');
   });
+
+  it('rejects an object whose magic bytes contradict the declared Content-Type (D-12)', async () => {
+    const token = await auto.userToken(owner);
+    const fake = Buffer.from('<html><body>not a png</body></html>');
+    const t = await auto.http('POST', '/api/v1/media/uploads', { token, body: { kind: 'IMAGE', mimeType: 'image/png', sizeBytes: fake.length }, headers: key() });
+    const put = await fetch(t.body.uploadUrl, { method: 'PUT', headers: t.body.uploadHeaders, body: fake });
+    expect(put.status).toBe(200);
+    uploaded.push(t.body.mediaId);
+    const r = await auto.http('POST', `/api/v1/media/${t.body.mediaId}/complete`, { token });
+    expect(r.status).toBe(422);
+    expect(r.body.code).toBe('MEDIA_CONTENT_MISMATCH');
+    const doc = await auto.mongo.db(auto.db).collection('mediaAssets').findOne({ id: t.body.mediaId } as any) ?? await auto.mongo.db(auto.db).collection('mediaAssets').findOne({ _id: t.body.mediaId } as any);
+    expect(doc?.status).toBe('PENDING_UPLOAD');
+    expect(await auto.mongo.db(auto.db).collection('outbox').countDocuments({ 'payload.data.mediaId': t.body.mediaId })).toBe(0);
+  });
 });
 
 describe('manual moderation', () => {
