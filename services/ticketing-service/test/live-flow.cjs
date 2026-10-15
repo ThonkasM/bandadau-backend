@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- standalone CommonJS script run with plain node */
 // Manual check against the live infra: node test/live-flow.cjs  (needs a running ticketing-service on :17006 with JWKS_URL=http://host.docker.internal:19001)
 const http = require('node:http');
 const amqplib = require('amqplib');

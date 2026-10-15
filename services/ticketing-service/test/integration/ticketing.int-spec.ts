@@ -154,7 +154,7 @@ describe('GET /tickets/me, /tickets/:id, /tickets/signing-keys', () => {
 
     const none = await request(h.http).get('/api/v1/tickets/me?status=USED').set('Authorization', auth);
     expect(none.body).toEqual({ items: [], nextCursor: null });
-    expect((await request(h.http).get('/api/v1/tickets/me?limit=0').set('Authorization', auth)).status).toBe(422);
+    expect((await request(h.http).get('/api/v1/tickets/me?limit=0').set('Authorization', auth)).status).toBe(400);
     const bad = await request(h.http).get('/api/v1/tickets/me?cursor=garbage').set('Authorization', auth);
     expect(bad.status).toBe(400);
     expect(bad.body.code).toBe('INVALID_CURSOR');
@@ -265,7 +265,7 @@ describe('POST /tickets/validate (UC-14)', () => {
     const mismatch = await validate(qr, { eventId: uuidv7() });
     expect(mismatch.status).toBe(422);
     expect(mismatch.body.code).toBe('TICKET_EVENT_MISMATCH');
-    expect((await validate('', {})).status).toBe(422);
+    expect((await validate('', {})).status).toBe(400);
     expect((await request(h.http).post('/api/v1/tickets/validate').send({})).status).toBe(401);
     expect(await h.ticketItem(ticketId)).toMatchObject({ status: 'ISSUED' });
     expect(cmd.eventId).toBeDefined();
