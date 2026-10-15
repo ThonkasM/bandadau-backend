@@ -16,5 +16,6 @@ final readonly class DeviceToken
         public ?string $deviceName,
         public DateTimeImmutable $registeredAt,
         public DateTimeImmutable $lastSeenAt,
+        public ?WebPushSubscription $webPush = null,
     ) {}
 }

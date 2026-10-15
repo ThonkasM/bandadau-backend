@@ -35,6 +35,14 @@ class EnvironmentValidator
         if ((bool) config('notification.push.enabled') && ! filter_var((string) config('notification.push.url'), FILTER_VALIDATE_URL)) {
             $problems[] = 'EXPO_PUSH_URL must be a valid URL when PUSH_ENABLED=true';
         }
+        $vapidPublic = trim((string) config('notification.push.vapid.public_key'));
+        $vapidPrivate = trim((string) config('notification.push.vapid.private_key'));
+        if (($vapidPublic === '') !== ($vapidPrivate === '')) {
+            $problems[] = 'VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set together';
+        }
+        if ($vapidPublic !== '' && ! preg_match('#^(mailto:|https://)#', (string) config('notification.push.vapid.subject'))) {
+            $problems[] = 'VAPID_SUBJECT must start with mailto: or https://';
+        }
         if (config('mail.default') === 'smtp' && (trim((string) config('mail.mailers.smtp.host')) === '' || (int) config('mail.mailers.smtp.port') < 1)) {
             $problems[] = 'MAIL_HOST and MAIL_PORT are required for the smtp mailer';
         }

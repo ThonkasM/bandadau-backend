@@ -23,6 +23,8 @@ use Bandada\Notification\InterfaceAdapters\Gateways\Smtp\SmtpEmailSender;
 use Bandada\Notification\InterfaceAdapters\Gateways\System\SystemClock;
 use Bandada\Notification\InterfaceAdapters\Gateways\System\UuidV7Generator;
 use Bandada\Notification\InterfaceAdapters\Gateways\Templates\IcuTemplateRenderer;
+use Bandada\Notification\InterfaceAdapters\Gateways\WebPush\PlatformRoutingPushSender;
+use Bandada\Notification\InterfaceAdapters\Gateways\WebPush\WebPushSender;
 use Bandada\Notification\InterfaceAdapters\Shared\Amqp\AmqpConnectionFactory;
 use Bandada\Notification\InterfaceAdapters\Shared\Amqp\Topology;
 use Bandada\Notification\InterfaceAdapters\Shared\Idempotency\IdempotencyStore;
@@ -36,6 +38,7 @@ use Bandada\Notification\UseCases\Ports\NotificationRepository;
 use Bandada\Notification\UseCases\Ports\PreferenceRepository;
 use Bandada\Notification\UseCases\Ports\PushSender;
 use Bandada\Notification\UseCases\Ports\TemplateRenderer;
+use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\ServiceProvider;
@@ -101,12 +104,24 @@ class NotificationServiceProvider extends ServiceProvider
         $this->app->bind(DeviceRepository::class, fn (Application $a): DeviceRepository => new DynamoDeviceRepository($a->make(DynamoDbClient::class), new Marshaler, $table()));
         $this->app->singleton(TemplateRenderer::class, fn (): TemplateRenderer => new IcuTemplateRenderer((string) config('notification.display_timezone')));
         $this->app->bind(EmailSender::class, fn (Application $a): EmailSender => new SmtpEmailSender($a->make('mailer')));
-        $this->app->bind(PushSender::class, fn (Application $a): PushSender => new ExpoPushSender(
-            $a->make(Factory::class),
-            (string) config('notification.push.url'),
-            (string) config('notification.push.access_token'),
-            (int) config('notification.push.chunk_size'),
-        ));
+        $this->app->bind(PushSender::class, function (Application $a): PushSender {
+            $expo = new ExpoPushSender(
+                $a->make(Factory::class),
+                (string) config('notification.push.url'),
+                (string) config('notification.push.access_token'),
+                (int) config('notification.push.chunk_size'),
+            );
+            $public = (string) config('notification.push.vapid.public_key');
+            $private = (string) config('notification.push.vapid.private_key');
+            $web = $public !== '' && $private !== ''
+                ? new WebPushSender(
+                    (string) config('notification.push.vapid.subject'), $public, $private,
+                    (int) config('notification.push.vapid.ttl_seconds'), new GuzzleClient(['timeout' => 10, 'http_errors' => false]),
+                )
+                : null;
+
+            return new PlatformRoutingPushSender($expo, $web);
+        });
         $this->app->singleton(NotificationSettings::class, fn (): NotificationSettings => new NotificationSettings(
             (bool) config('notification.push.enabled'),
             (bool) config('notification.email.enabled'),

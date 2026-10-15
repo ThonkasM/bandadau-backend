@@ -36,7 +36,7 @@ final readonly class EventToNotificationMapper
                 $this->links($d, ['eventId'], '/events/'.$this->str($d['eventId'] ?? ''))),
             'bandada.social.comment.created.v1' => $this->comment($d),
             'bandada.social.reaction.set.v1' => $this->reaction($d),
-            'bandada.social.follow.created.v1' => $this->one($d['followeeId'] ?? null, NotificationType::NewFollower, [],
+            'bandada.social.follow.created.v1' => $this->one($d['followeeId'] ?? null, NotificationType::NewFollower, $this->actor($d),
                 $this->links($d, ['followerId'], '/profiles/'.$this->str($d['followerId'] ?? ''))),
             'bandada.social.group.join-requested.v1' => $this->groupRequest($d),
             'bandada.social.post.hidden.v1', 'bandada.social.post.removed.v1' => $this->one($d['authorId'] ?? null, NotificationType::ContentFlagged, [],
@@ -60,7 +60,7 @@ final readonly class EventToNotificationMapper
             return MappedEvent::nothing();
         }
 
-        return $this->one($author, NotificationType::NewComment, [], $this->links($d, ['postId', 'commentId'], '/posts/'.$this->str($d['postId'] ?? '')));
+        return $this->one($author, NotificationType::NewComment, $this->actor($d), $this->links($d, ['postId', 'commentId'], '/posts/'.$this->str($d['postId'] ?? '')));
     }
 
     /** @param array<string, mixed> $d */
@@ -74,10 +74,23 @@ final readonly class EventToNotificationMapper
         return new MappedEvent([new Intent(
             $author,
             NotificationType::NewReaction,
-            [],
+            $this->actor($d),
             $this->links($d, ['postId'], '/posts/'.$this->str($d['postId'] ?? '')),
             'reaction:'.$this->str($d['postId'] ?? '').':'.$author,
         )]);
+    }
+
+    /**
+     * Optional `actorDisplayName` (AsyncAPI 1.3.0): when present the text names the actor, otherwise it stays generic ("Alguien").
+     *
+     * @param  array<string, mixed>  $d
+     * @return array<string, mixed>
+     */
+    private function actor(array $d): array
+    {
+        $name = is_string($d['actorDisplayName'] ?? null) ? trim($d['actorDisplayName']) : '';
+
+        return $name === '' ? [] : ['actorName' => mb_substr($name, 0, 80), 'hasActor' => 'yes'];
     }
 
     /** @param array<string, mixed> $d */

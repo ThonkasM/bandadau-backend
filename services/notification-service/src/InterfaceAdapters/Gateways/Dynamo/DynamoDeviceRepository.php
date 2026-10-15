@@ -9,6 +9,7 @@ use Aws\DynamoDb\Exception\DynamoDbException;
 use Aws\DynamoDb\Marshaler;
 use Bandada\Notification\Entities\DevicePlatform;
 use Bandada\Notification\Entities\DeviceToken;
+use Bandada\Notification\Entities\WebPushSubscription;
 use Bandada\Notification\InterfaceAdapters\Shared\Support\Timestamps;
 use Bandada\Notification\UseCases\Ports\DeviceRepository;
 
@@ -37,12 +38,13 @@ final readonly class DynamoDeviceRepository implements DeviceRepository
                 'TableName' => $this->table,
                 'Key' => $this->marshaler->marshalItem(['pk' => 'USER#'.$device->userId, 'sk' => 'DEVICE#'.$device->token]),
                 'UpdateExpression' => 'SET userId = :u, #token = :tk, platform = :p, appVersion = :av, deviceName = :dn, lastSeenAt = :now, '
-                    .'registeredAt = if_not_exists(registeredAt, :now), gsi1pk = :g1p, gsi1sk = :g1s',
+                    .'registeredAt = if_not_exists(registeredAt, :now), gsi1pk = :g1p, gsi1sk = :g1s, webPush = :wp',
                 'ExpressionAttributeNames' => ['#token' => 'token'],
                 'ExpressionAttributeValues' => $this->marshaler->marshalItem([
                     ':u' => $device->userId, ':tk' => $device->token, ':p' => $device->platform->value,
                     ':av' => $device->appVersion, ':dn' => $device->deviceName, ':now' => $now,
                     ':g1p' => 'DEVICE#'.$device->token, ':g1s' => 'USER#'.$device->userId,
+                    ':wp' => $device->webPush === null ? null : ['endpoint' => $device->webPush->endpoint, 'p256dh' => $device->webPush->p256dh, 'auth' => $device->webPush->auth],
                 ]),
                 'ReturnValues' => 'ALL_NEW',
             ]);
@@ -85,6 +87,9 @@ final readonly class DynamoDeviceRepository implements DeviceRepository
             isset($i['appVersion']) ? (string) $i['appVersion'] : null,
             isset($i['deviceName']) ? (string) $i['deviceName'] : null,
             Timestamps::fromDb((string) $i['registeredAt']), Timestamps::fromDb((string) $i['lastSeenAt']),
+            isset($i['webPush']['endpoint'], $i['webPush']['p256dh'], $i['webPush']['auth'])
+                ? new WebPushSubscription((string) $i['webPush']['endpoint'], (string) $i['webPush']['p256dh'], (string) $i['webPush']['auth'])
+                : null,
         );
     }
 }

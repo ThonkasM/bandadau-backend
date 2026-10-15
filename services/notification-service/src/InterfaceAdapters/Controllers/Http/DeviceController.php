@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bandada\Notification\InterfaceAdapters\Controllers\Http;
 
 use Bandada\Notification\Entities\DevicePlatform;
+use Bandada\Notification\Entities\WebPushSubscription;
 use Bandada\Notification\InterfaceAdapters\Controllers\Http\Security\Principal;
 use Bandada\Notification\InterfaceAdapters\Controllers\Http\Support\JsonBody;
 use Bandada\Notification\InterfaceAdapters\Controllers\Http\Support\RequestValidator;
@@ -44,6 +45,13 @@ final readonly class DeviceController
             DevicePlatform::from((string) $body['platform']),
             isset($body['appVersion']) ? (string) $body['appVersion'] : null,
             isset($body['deviceName']) ? (string) $body['deviceName'] : null,
+            isset($body['webPushSubscription']['endpoint'], $body['webPushSubscription']['keys']['p256dh'], $body['webPushSubscription']['keys']['auth'])
+                ? new WebPushSubscription(
+                    (string) $body['webPushSubscription']['endpoint'],
+                    (string) $body['webPushSubscription']['keys']['p256dh'],
+                    (string) $body['webPushSubscription']['keys']['auth'],
+                )
+                : null,
         );
 
         return new JsonResponse(Presenter::device($device));

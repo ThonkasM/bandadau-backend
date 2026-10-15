@@ -17,6 +17,13 @@ return [
         'url' => (string) env('EXPO_PUSH_URL', 'https://exp.host/--/api/v2/push/send'),
         'access_token' => (string) env('EXPO_ACCESS_TOKEN', ''),
         'chunk_size' => 100,
+        // Web Push (VAPID). Both keys unset = Web Push disabled (Expo keeps working). Generate: `php artisan bandada:vapid-keys`.
+        'vapid' => [
+            'subject' => (string) env('VAPID_SUBJECT', 'mailto:no-reply@bandada.localhost'),
+            'public_key' => (string) env('VAPID_PUBLIC_KEY', ''),
+            'private_key' => (string) env('VAPID_PRIVATE_KEY', ''),
+            'ttl_seconds' => (int) env('WEB_PUSH_TTL_SECONDS', 86400),
+        ],
     ],
 
     'email' => [

@@ -69,3 +69,13 @@ it('notifies alert recipients only when the event names them', function () {
     expect(mapped('bandada.insights.alert.raised.v1', ['message' => 'DLQ', 'severity' => 'WARNING'])->intents)->toBeEmpty()
         ->and(mapped('bandada.insights.alert.raised.v1', ['message' => 'DLQ', 'recipientUserIds' => [AUTHOR]])->intents)->toHaveCount(1);
 });
+
+it('names the actor in comment, reaction and follow texts only when the event carries actorDisplayName', function () {
+    $comment = ['postAuthorId' => AUTHOR, 'authorId' => OTHER, 'postId' => 'p'];
+    $reaction = ['postAuthorId' => AUTHOR, 'userId' => OTHER, 'postId' => 'p', 'previousType' => null];
+    $follow = ['followeeId' => AUTHOR, 'followerId' => OTHER];
+    foreach ([['bandada.social.comment.created.v1', $comment], ['bandada.social.reaction.set.v1', $reaction], ['bandada.social.follow.created.v1', $follow]] as [$type, $data]) {
+        expect(mapped($type, $data + ['actorDisplayName' => ' Lucía Vargas '])->intents[0]->params)->toMatchArray(['actorName' => 'Lucía Vargas', 'hasActor' => 'yes'])
+            ->and(mapped($type, $data)->intents[0]->params)->not->toHaveKey('hasActor');
+    }
+});

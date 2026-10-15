@@ -117,3 +117,18 @@ it('registers devices idempotently, reassigns a token to the new owner and unreg
     $this->putJson($url, ['platform' => 'PLAYSTATION'], $this->auth($a))->assertStatus(400);
     $this->putJson('/api/v1/devices/short', ['platform' => 'IOS'], $this->auth($a))->assertStatus(400);
 });
+
+it('stores the Web Push subscription of a WEB device and ignores it for other platforms', function () {
+    $user = $this->newUser();
+    $subscription = ['endpoint' => 'https://push.example/sub/abc', 'keys' => ['p256dh' => 'BPubKeyBase64Url', 'auth' => 'authSecret16bytes']];
+    $url = '/api/v1/devices/'.hash('sha256', $subscription['endpoint']);
+
+    $this->putJson($url, ['platform' => 'WEB', 'webPushSubscription' => $subscription], $this->auth($user))->assertOk()->assertJsonPath('platform', 'WEB');
+    $stored = app(DeviceRepository::class)->forUser($user);
+    expect($stored)->toHaveCount(1)->and($stored[0]->webPush?->endpoint)->toBe($subscription['endpoint'])
+        ->and($stored[0]->webPush?->p256dh)->toBe('BPubKeyBase64Url')->and($stored[0]->webPush?->auth)->toBe('authSecret16bytes');
+
+    $this->putJson($url, ['platform' => 'WEB', 'webPushSubscription' => ['endpoint' => 'not-a-url', 'keys' => ['p256dh' => 'a', 'auth' => 'b']]], $this->auth($user))->assertStatus(400);
+    $this->putJson($url, ['platform' => 'IOS', 'webPushSubscription' => $subscription], $this->auth($user))->assertOk();
+    expect(app(DeviceRepository::class)->forUser($user)[0]->webPush)->toBeNull();
+});

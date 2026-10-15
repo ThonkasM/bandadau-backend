@@ -7,6 +7,7 @@ namespace Bandada\Notification\UseCases\Devices;
 use Bandada\Notification\Entities\DevicePlatform;
 use Bandada\Notification\Entities\DeviceToken;
 use Bandada\Notification\Entities\Exception\InvalidDeviceTokenException;
+use Bandada\Notification\Entities\WebPushSubscription;
 use Bandada\Notification\UseCases\Ports\Clock;
 use Bandada\Notification\UseCases\Ports\DeviceRepository;
 
@@ -14,7 +15,7 @@ final readonly class RegisterDevice
 {
     public function __construct(private DeviceRepository $devices, private Clock $clock) {}
 
-    public function execute(string $userId, string $token, DevicePlatform $platform, ?string $appVersion, ?string $deviceName): DeviceToken
+    public function execute(string $userId, string $token, DevicePlatform $platform, ?string $appVersion, ?string $deviceName, ?WebPushSubscription $webPush = null): DeviceToken
     {
         $length = strlen($token);
         if ($length < 8 || $length > 512) {
@@ -22,6 +23,6 @@ final readonly class RegisterDevice
         }
         $now = $this->clock->now();
 
-        return $this->devices->register(new DeviceToken($token, $userId, $platform, $appVersion, $deviceName, $now, $now));
+        return $this->devices->register(new DeviceToken($token, $userId, $platform, $appVersion, $deviceName, $now, $now, $platform === DevicePlatform::Web ? $webPush : null));
     }
 }

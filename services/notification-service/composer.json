@@ -10,6 +10,7 @@
         "aws/aws-sdk-php": "^3.401",
         "firebase/php-jwt": "^7.2",
         "laravel/framework": "^12.0",
+        "minishlink/web-push": "^11.0",
         "php-amqplib/php-amqplib": "^3.7"
     },
     "autoload": {
