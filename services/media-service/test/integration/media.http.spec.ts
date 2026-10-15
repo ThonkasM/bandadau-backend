@@ -144,6 +144,12 @@ describe('manual moderation', () => {
     expect((await manual.http('GET', '/internal/v1/media', { token })).status).toBe(401);
 
     const actor = { 'x-actor-id': uuidv7() };
+    // D-7: GET needs internal:read, the decision needs internal:write
+    const readOnly = await manual.serviceToken('internal:read');
+    const writeOnly = await manual.serviceToken('internal:write');
+    expect((await manual.http('GET', `/internal/v1/media/${a}`, { token: readOnly })).status).toBe(200);
+    expect((await manual.http('GET', `/internal/v1/media/${a}`, { token: writeOnly })).status).toBe(403);
+    expect((await manual.http('POST', `/internal/v1/media/${a}/decision`, { token: readOnly, body: { decision: 'APPROVE' }, headers: actor })).status).toBe(403);
     const ok = await manual.http('POST', `/internal/v1/media/${a}/decision`, { token: svc, body: { decision: 'APPROVE' }, headers: actor });
     expect(ok.status).toBe(200);
     expect(ok.body.status).toBe('APPROVED');

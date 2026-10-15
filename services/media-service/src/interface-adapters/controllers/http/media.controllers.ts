@@ -1,4 +1,4 @@
-import { CurrentUser, Internal, type RequestWithPrincipal } from '@bandada/auth-ts/nest';
+import { CurrentUser, Internal, type RequestWithPrincipal, RequireScopes } from '@bandada/auth-ts/nest';
 import { Idempotent } from '@bandada/idempotency-ts/nest';
 import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import type { z } from 'zod';
@@ -41,6 +41,9 @@ export class MediaController {
   }
 }
 
+/** D-7 (seguridad-y-sso.md §2.1): GET -> `internal:read`, the rest -> `internal:write`. `INTERNAL_SCOPES_ENFORCED=false` disables it (escape hatch). */
+const scope = (name: 'internal:read' | 'internal:write'): MethodDecorator => RequireScopes(...(process.env['INTERNAL_SCOPES_ENFORCED'] === 'false' ? [] : [name]));
+
 /** Service-to-service API (`/internal/v1/media`). Static routes are declared before `:mediaId`. */
 @Controller('internal/v1/media')
 @Internal()
@@ -53,6 +56,7 @@ export class InternalMediaController {
   ) {}
 
   @Get()
+  @scope('internal:read')
   async listFlagged(@Query(new ZodValidationPipe(flaggedQuery)) q: In<typeof flaggedQuery>) {
     return presentModeratedPage(
       await this.list.execute({ status: q.status, ...(q.ownerId ? { ownerId: q.ownerId } : {}), ...(q.since ? { since: new Date(q.since) } : {}), cursor: decodeCursor(q.cursor), limit: q.limit }),
@@ -60,6 +64,7 @@ export class InternalMediaController {
   }
 
   @Get('urls')
+  @scope('internal:read')
   async getUrls(@Query(new ZodValidationPipe(urlsQuery)) q: In<typeof urlsQuery>, @Req() req: RequestWithPrincipal) {
     const fromAdminGateway = req.user?.sub === 'admin-gateway' || req.user?.sub === 'service:admin-gateway';
     const items = await this.urls.execute({ ids: q.ids, includeUnapproved: q.includeUnapproved && fromAdminGateway });
@@ -67,11 +72,13 @@ export class InternalMediaController {
   }
 
   @Get(':mediaId')
+  @scope('internal:read')
   async media(@Param('mediaId', id('mediaId')) mediaId: string) {
     return presentModerated(await this.getInternal.execute(mediaId));
   }
 
   @Post(':mediaId/decision')
+  @scope('internal:write')
   @HttpCode(200)
   async decision(
     @Param('mediaId', id('mediaId')) mediaId: string,
