@@ -1,116 +1,77 @@
 # AGENTS.md — wallet-service (S5)
 
-Lee primero el `AGENTS.md` del workspace (`../../../AGENTS.md`), el del repo (`../../AGENTS.md`), `bandadau-docs/docs/03-arquitectura/catalogo-servicios.md`,
-`bandadau-docs/docs/04-patrones-y-reglas/arquitectura-hexagonal.md` (el ejemplo `DebitCredits` es de este
-servicio) y `bandadau-docs/docs/03-arquitectura/idempotencia.md`.
+Lee primero `../../../AGENTS.md`, `../../AGENTS.md`, `bandadau-docs/docs/03-arquitectura/catalogo-servicios.md`,
+`bandadau-docs/docs/04-patrones-y-reglas/arquitectura-hexagonal.md`, `idempotencia.md` y
+`bandadau-docs/docs/06-plan/fase-1-alcance-y-contrato-local.md` (normativo para la fase 1).
 
 ## Identidad
 
-Billetera de **créditos** (enteros): saldo, libro mayor (`LedgerEntry`), recargas con pasarela
-simulada y webhook firmado, y los pasos de débito/reembolso de la SAGA (C1). Es el caso
-estrella de idempotencia (T8: doble clic en "pagar" = un solo cargo).
+Billetera de **créditos enteros**: saldo, libro mayor (`ledger_entries`), recargas con pasarela simulada y
+webhook firmado, y los pasos de débito/reembolso de la SAGA de inscripción. Invariantes: saldo ≥ 0,
+saldo = suma del ledger, `operation_ref` único (`TOPUP:<id>`, `DEBIT:<registrationId>`, `REFUND:<registrationId>`).
 
 ## Stack
 
-PHP 8.4 · Laravel 12 · PostgreSQL 18 (`wallet_db`) · RabbitMQ (`php-amqplib`, verificar versión) ·
-AWS SDK PHP (DynamoDB idempotencia) · OpenTelemetry PHP · Pest · Larastan nivel 8 · Pint · Deptrac.
+PHP 8.4 · Laravel 12.70 (solo composition root) · PostgreSQL `wallet_db` · RabbitMQ (`php-amqplib` 3.7) ·
+DynamoDB (`aws/aws-sdk-php`, tabla `bandada-idempotency`) · `firebase/php-jwt` 7 · Pest 4 · Larastan 3 (nivel 8) · Deptrac 4 · Pint.
 
 ## Arquitectura: Hexagonal
 
 ```
-src/  (Bandada\Wallet\)
-├── Domain/{Model,Event,Exception}
-├── Application/{Port/In,Port/Out,UseCase}
-└── Adapter/{In/Http,In/Messaging,Out/Persistence,Out/Messaging,Out/External}
-app/Providers/WalletServiceProvider.php (bind puertos)   app/Console/Commands/
-routes/api.php   database/migrations/   lang/{es,en}/problems.php   tests/   deptrac.yaml
+src/ (Bandada\Wallet\)
+├── Domain/{Model,Event,Exception}               Wallet, Credits, OperationRef, LedgerEntry, TopUp, ...
+├── Application/{Port/In,Port/Out,UseCase}       *UseCase + *Service; inbox/transacción dentro del caso de uso
+└── Adapter/{In/Http,In/Messaging,Out/Persistence,Out/Messaging,Out/External,Shared}
+app/{Providers/WalletServiceProvider,Console/Commands,Logging,Support}   routes/api.php   lang/{es,en}   deptrac.yaml
 ```
 
-## Comandos (propuestos)
+`Adapter/Shared` = contratos técnicos comunes a adaptadores de entrada y salida (idempotency store, AMQP, CloudEvent,
+log context). Persistencia con Query Builder (sin modelos Eloquent). Deptrac falla el build ante cualquier violación.
+
+## Comandos
 
 ```bash
-composer install
-php artisan serve --port=7005                 # API (en Docker: php-fpm/FrankenPHP según infra)
-php artisan wallet:consume-commands           # worker de comandos SAGA
-php artisan wallet:relay-outbox               # relay outbox → RabbitMQ
-php artisan migrate
-./vendor/bin/pest                             # unit + integración
-./vendor/bin/pint --test && ./vendor/bin/phpstan analyse && ./vendor/bin/deptrac analyse
+# Todo en Docker (no hay PHP local)
+docker compose -f docker-compose.test.yml up -d --wait db mq dynamo        # Postgres:15501 RabbitMQ:15601 Dynamo:15701
+docker compose -f docker-compose.test.yml run --rm tests vendor/bin/pest   # unitarias + integración (99 pruebas)
+docker compose -f docker-compose.test.yml run --rm tests sh -c "vendor/bin/pint --test && vendor/bin/phpstan analyse --memory-limit=512M && vendor/bin/deptrac analyse --fail-on-uncovered"
+docker compose -f docker-compose.test.yml down -v
+docker build -t bandada/wallet-service:local .
 ```
 
-## Variables de entorno (`.env.example`)
+Roles de la imagen (misma imagen): `web` (por defecto; migra y levanta nginx+php-fpm :7005), `worker`
+(`php artisan wallet:consume-commands`, alias `bandada:consume`), `relay` (`php artisan wallet:relay-outbox`, alias
+`bandada:relay`: outbox→RabbitMQ + expiración de recargas + purga). Otros: `bandada:check-env`, `bandada:declare-topology`
+(solo dev/tests), `wallet:expire-topups`.
 
-```
-APP_ENV=local
-APP_KEY=
-APP_PORT=7005
-APP_LOCALE=es
-APP_FALLBACK_LOCALE=es
-DB_CONNECTION=pgsql
-DB_HOST=localhost
-DB_PORT=5432
-DB_DATABASE=wallet_db
-DB_USERNAME=wallet
-DB_PASSWORD=change-me
-RABBITMQ_URL=amqp://bandada:bandada@localhost:5672
-JWKS_URL=http://localhost:7001/.well-known/jwks.json
-JWT_ISSUER=http://api.bandada.localhost
-PAYMENT_WEBHOOK_SECRET=change-me            # HMAC del webhook
-PAYMENT_CHECKOUT_BASE_URL=http://app.bandada.localhost/wallet/checkout
-SIMULATE_PAYMENT_ENABLED=true               # false en producción
-TOPUP_PACKAGES=CREDITS_20,CREDITS_50,CREDITS_100   # RF-19
-CHAOS_WALLET_DELAY_MS=0
-IDEMPOTENCY_TABLE=bandada-idempotency
-DYNAMODB_ENDPOINT=http://localhost:8000
-AWS_DEFAULT_REGION=us-east-1
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
-OTEL_SERVICE_NAME=wallet-service
-```
+## Variables (ver `.env.example`)
 
-## Puertos y rutas
+`DB_*`, `RABBITMQ_URL`, `RABBITMQ_DECLARE_TOPOLOGY` (false; true solo dev/tests), `JWKS_URL`, `JWT_ISSUER`,
+`PAYMENT_WEBHOOK_SECRET` (≥16 car.), `PAYMENT_SIMULATOR_ENABLED`, `PAYMENT_CHECKOUT_BASE_URL`, `TOPUP_PACKAGES`,
+`TOPUP_TTL_MINUTES`, `IDEMPOTENCY_TABLE`, `DYNAMODB_ENDPOINT`, `AWS_*`, `CORS_ORIGINS`, `CHAOS_WALLET_DELAY_MS`
+(debe ser 0 en producción), `LOG_CHANNEL` (`stdout` | `stderr`). El arranque valida el entorno y falla rápido.
 
-Dev **7005**. Público `/api/v1/wallet/**` (incluye `/wallet/webhooks/payment` sin JWT).
-Interno `/internal/v1/stats/credits`.
+## Endpoints
 
-## Contratos
-
-`bandadau-docs/contracts/openapi/wallet-service.yaml`: `getMyWallet`, `listMyLedgerEntries`, `createTopUp` ♻️,
-`simulatePayment` (dev/demo), `paymentWebhook` (HMAC, idempotente por `gatewayRef`), `getCreditStats`.
+Implementados: `getMyWallet`, `listMyLedgerEntries`, `createTopUp` (Idempotency-Key), `getTopUp`, `simulateTopUpPayment`
+(404 si `PAYMENT_SIMULATOR_ENABLED=false`), `paymentWebhook` (HMAC `X-Signature: sha256=<hex>`, ventana anti-replay 5 min sobre
+`occurredAt`, 200 + `duplicate:true` en repetidos), `getCreditStats` (`/internal/v1/stats/credits`, token de servicio `internal:read`),
+`/health/live`, `/health/ready` (Postgres, RabbitMQ, DynamoDB). Diferido: limitación de tasa por usuario (429), exportador OTLP
+(solo se propaga `traceparent`).
 
 ## Mensajería
 
-- **Consume** (`wallet-service.commands`, binding `bandada.wallet.cmd.#`):
-  `bandada.wallet.cmd.debit-credits.v1`, `bandada.wallet.cmd.refund-credits.v1`.
-- **Publica**: `bandada.wallet.credits-debited.v1`, `…credits-debit-failed.v1`
-  (`INSUFFICIENT_FUNDS`, `WALLET_NOT_FOUND`), `…credits-refunded.v1`, `bandada.wallet.topup.paid.v1`.
-- Consume `bandada.identity.user.registered.v1` **solo si** se decide crear la billetera al registrarse
-  (propuesta; si no, se crea perezosamente en el primer `getMyWallet`/recarga — documentar en el UC).
+- Consume `wallet-service.commands` (`bandada.wallet.cmd.#`): `debit-credits.v1`, `refund-credits.v1`. Ack manual tras commit,
+  reintentos 5s/30s/5m (máx. 3) y DLQ; mensajes inválidos/desconocidos → DLQ directo.
+- Publica por outbox + relay (`bandada.events`): `credits-debited`, `credits-debit-failed` (`INSUFFICIENT_FUNDS`,
+  `WALLET_NOT_FOUND`, `SAGA_ABORTED`), `credits-refunded` (con `amountCredits: 0` = tombstone), `topup.paid`.
+  Las respuestas incluyen `idempotencyKey` (eco del comando) y extensiones `sagaid`, `correlationid`, `causationid`, `traceparent`.
+- Un reenvío del orquestador (otro `id`, misma operación) **re-publica** la respuesta original.
+- El relay usa `mandatory`: un mensaje sin cola enlazada es error de configuración (se reintenta, no se descarta).
 
-## Datos (`wallet_db`)
+## Decisiones / divergencias
 
-`wallets` (`user_id` único, `balance_credits BIGINT CHECK >= 0`, `version`), `ledger_entries`
-(`operation_ref` **único**, `type`, `amount_credits BIGINT`), `top_ups` (`gateway_ref` único),
-`outbox`, `processed_messages`.
-
-## Reglas específicas y gotchas
-
-- Créditos **siempre enteros** (`int`/`BIGINT`); prohibido `float`/`decimal`.
-- `operationRef`: `DEBIT:<registrationId>`, `REFUND:<registrationId>`, `TOPUP:<topUpId>`. Reembolso solo si
-  existe el débito correspondiente y no existe ya el reembolso.
-- Débito con `SELECT … FOR UPDATE` o bloqueo optimista por `version`; nunca leer-modificar-escribir sin bloqueo.
-- Inbox + efecto + outbox en **una** transacción (`TransactionManager::run`).
-- Webhook: verificar firma HMAC en tiempo constante; repetir → **200** sin efecto.
-- `simulate-payment` deshabilitado si `SIMULATE_PAYMENT_ENABLED=false`.
-- Facades de Laravel (`DB::`, `Log::`) solo en adaptadores/`app/`; Deptrac lo vigila.
-- Problem Details localizados por `Accept-Language` (`lang/{es,en}`), `code` estable
-  (`INSUFFICIENT_FUNDS`, `TOPUP_NOT_FOUND`, `INVALID_SIGNATURE`, `IDEMPOTENCY_*`).
-
-## Casos de uso
-
-UC-12 (débito SAGA), UC-13 (reembolso), UC-15 (recargar créditos), UC-16 (consultar movimientos);
-fuente de `get_credit_stats` (UC-19/UC-22).
-
-## Definición de hecho
-
-`definition-of-done.md` §0, §2, §3 + Deptrac + batería de idempotencia (topup doble clic, webhook
-repetido, comando duplicado) + prueba de saldo nunca negativo con débitos concurrentes.
+- Tombstone = fila `REFUND` de monto 0 (CHECK permite 0 solo para REFUND); se oculta en listados y estadísticas.
+- `IDEMPOTENCY_KEY_REQUIRED` (400) / `IDEMPOTENCY_KEY_INVALID` según `api-rest-guidelines.md` y `testing-strategy.md`.
+- Webhook con `topUpId` desconocido responde 404 `TOPUP_NOT_FOUND` (contrato OpenAPI), no 200 como sugiere UC-15.
+- Variable del simulador: `PAYMENT_SIMULATOR_ENABLED` (fase 1) en vez de `SIMULATE_PAYMENT_ENABLED`.

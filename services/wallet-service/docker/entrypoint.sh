@@ -42,6 +42,11 @@ case "$role" in
         exec php artisan bandada:relay
         ;;
     *)
+        # commands given by bandadau-infra (e.g. `php artisan wallet:consume-commands`): mark the role for the HEALTHCHECK
+        case "$*" in
+            *consume*) echo worker > /tmp/bandada-role; touch /tmp/bandada-heartbeat ;;
+            *relay*) echo relay > /tmp/bandada-role; touch /tmp/bandada-heartbeat ;;
+        esac
         exec "$@"
         ;;
 esac
