@@ -209,6 +209,10 @@ class EventsIntegrationTest {
         assertThat(commandsFor("bandada.ticketing.cmd.issue-ticket.v1", regId)).hasSize(1);
         assertThat(seatsTaken(eventId)).isEqualTo(1);
 
+        @SuppressWarnings("unchecked") Map<String, Object> issue = (Map<String, Object>) commandsFor("bandada.ticketing.cmd.issue-ticket.v1", regId).get(0).get("data");
+        assertThat(issue).containsEntry("organizerId", ORGANIZER.toString()).containsEntry("staffUserIds", List.of()).containsKey("eventEndsAt");
+        assertThat(java.time.Instant.parse((String) issue.get("eventEndsAt"))).isAfter(java.time.Instant.parse((String) issue.get("eventStartsAt")));
+
         awaitEvent("bandada.events.registration.confirmed.v1", regId);
         @SuppressWarnings("unchecked") Map<String, Object> data = (Map<String, Object>) eventsOf("bandada.events.registration.confirmed.v1", regId).get(0).get("data");
         assertThat(data).containsEntry("userId", user.toString()).containsEntry("priceCredits", 20).containsKeys("sagaId", "ticketId", "eventTitle", "eventStartsAt");

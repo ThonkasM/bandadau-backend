@@ -46,6 +46,10 @@ public final class SagaMessages {
                 d.put("eventTitle", ctx.eventTitle());
                 d.put("eventStartsAt", ctx.eventStartsAt());
                 d.put("venue", ctx.venue());
+                // Sagas persisted before this change have no snapshot of these: omit instead of sending null (contract: optional).
+                if (ctx.organizerId() != null) d.put("organizerId", ctx.organizerId());
+                d.put("staffUserIds", java.util.List.<UUID>of()); // Event has no staff yet
+                if (ctx.eventEndsAt() != null) d.put("eventEndsAt", ctx.eventEndsAt());
             }
             case SagaCommand.VoidTicket c -> {
                 type = "bandada.ticketing.cmd.void-ticket.v1";

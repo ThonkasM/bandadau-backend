@@ -51,7 +51,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     qrPreviousKeysPath: env.QR_PREVIOUS_JWKS_PATH || undefined,
     // Read once at startup (demo of the SAGA rollback); never enable in production.
     chaosTicketingFail: bool(env.CHAOS_TICKETING_FAIL, false),
-    strictOrganizerCheck: bool(env.STRICT_ORGANIZER_CHECK, false),
+    strictOrganizerCheck: bool(env.STRICT_ORGANIZER_CHECK, true),
     validationOpensBeforeMs: num(env.VALIDATION_OPENS_BEFORE_MINUTES, 120) * 60_000,
     validationDefaultDurationMs: num(env.VALIDATION_DEFAULT_DURATION_MINUTES, 720) * 60_000,
     relayPollIntervalMs: num(env.OUTBOX_RELAY_INTERVAL_MS, 500),

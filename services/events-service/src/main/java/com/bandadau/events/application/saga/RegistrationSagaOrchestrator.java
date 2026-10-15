@@ -58,7 +58,8 @@ public class RegistrationSagaOrchestrator {
                               String correlationId) {
         var now = clock.now();
         SagaContext ctx = SagaContext.initial(event.id().value(), registration.userId(), registration.price().value(),
-                event.title(), event.venue(), event.schedule().startsAt(), correlationId, registration.ticketId(), cancelReason);
+                event.title(), event.venue(), event.schedule().startsAt(), correlationId, registration.ticketId(), cancelReason,
+                event.organizerId(), event.schedule().endsAt());
         SagaInstance saga = SagaInstance.create(new SagaId(ids.newId()), registration.id(), type, ctx, now);
         SagaDecision decision = saga.start(policy, now);
         sagas.insert(saga);

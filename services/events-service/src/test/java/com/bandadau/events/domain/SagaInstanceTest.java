@@ -18,11 +18,12 @@ class SagaInstanceTest {
     static final Instant T0 = Instant.parse("2026-10-14T12:00:00Z");
     static final SagaPolicy POLICY = SagaPolicy.defaults();
     final UUID ticket = UUID.randomUUID();
+    static final UUID ORGANIZER = UUID.randomUUID();
 
     SagaInstance saga(SagaType type, long price, CompensationReason cancelReason, UUID ticketId) {
         return SagaInstance.create(new SagaId(UUID.randomUUID()), new RegistrationId(UUID.randomUUID()), type,
                 SagaContext.initial(UUID.randomUUID(), UUID.randomUUID(), price, "Taller", "Aula", T0.plusSeconds(86400 * 3),
-                        "corr-1", ticketId, cancelReason), T0);
+                        "corr-1", ticketId, cancelReason, ORGANIZER, T0.plusSeconds(86400 * 3 + 7200)), T0);
     }
 
     SagaInstance registration(long price) { return saga(SagaType.REGISTRATION, price, null, null); }

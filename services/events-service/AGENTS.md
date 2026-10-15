@@ -57,6 +57,7 @@ Dev **7004**. Público `/api/v1/events/**`, `/api/v1/registrations/**`. Interno
   (timeout débito → `refund-credits` tombstone; timeout ticket → `void-ticket` → `refund-credits`); **compensaciones reintentadas sin límite** (backoff 5 s ×2, tope 60 s) con alerta a los 2 min
   (log `event=saga.compensation.stuck` + métrica); `retrySaga` re-impulsa SAGAs `FAILED` y `COMPENSATING` atascadas. `FAILED` solo por `TICKET_ALREADY_USED`.
   Débito tardío tras terminar → `refund-credits` defensivo. Respuestas fuera de paso / `ALREADY_VOIDED` se ignoran. Inbox `processed_messages` en la misma TX.
+- El comando `issue-ticket` incluye `organizerId` (del Event), `staffUserIds` (`[]`: el Event aún no tiene staff) y `eventEndsAt`, copiados al `SagaContext` (JSONB, sin migración; SAGAs previas sin snapshot omiten `organizerId`/`eventEndsAt`). Con ello ticketing restringe la validación al organizador del evento.
 - El contrato no trae `endsAt`: `endsAt = startsAt + EVENT_DEFAULT_DURATION` (2 h). Se valida el `coverMediaId` (propio, `APPROVED`) en `createEvent` con `COVER_CHECK=on`; `coverUrl` vía `getMediaUrls` (degrada a null).
 - Códigos del contrato: `INVALID_REGISTRATION_STATUS`, `CANCELLATION_WINDOW_CLOSED`, `MEDIA_NOT_APPROVED`, `INVALID_EVENT_STATUS`.
 - Evento cancelado por el organizador/ADMIN: una SAGA `CANCELLATION` por inscripción `CONFIRMED` (lotes de 50); inscripciones en vuelo se cancelan al confirmarse.

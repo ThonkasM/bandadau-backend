@@ -49,7 +49,7 @@ docker build --build-context shared=../bandadau-shared -f services/ticketing-ser
 `PORT`, `NODE_ENV`, `DYNAMODB_ENDPOINT`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `TICKETING_TABLE`,
 `IDEMPOTENCY_TABLE`, `RABBITMQ_URL`, `JWKS_URL`, `JWT_ISSUER`, `CORS_ORIGINS`, `QR_SIGNING_KEY_PATH`, `QR_SIGNING_KID`
 (header `kid` del QR), `QR_PREVIOUS_JWKS_PATH` (claves públicas rotadas, opcional), `CHAOS_TICKETING_FAIL` (se lee al arrancar),
-`STRICT_ORGANIZER_CHECK`, `VALIDATION_OPENS_BEFORE_MINUTES` (120), `VALIDATION_DEFAULT_DURATION_MINUTES` (720),
+`STRICT_ORGANIZER_CHECK` (true por defecto), `VALIDATION_OPENS_BEFORE_MINUTES` (120), `VALIDATION_DEFAULT_DURATION_MINUTES` (720),
 `OUTBOX_RELAY_INTERVAL_MS` (500), `TICKETING_COMMANDS_QUEUE` (solo pruebas). `QR_KEY_ID`, `EVENTS_SERVICE_URL`,
 `SERVICE_CLIENT_ID/SECRET` del compose no se usan (no se llama a events-service: la autorización sale del comando).
 
@@ -88,8 +88,8 @@ Emisión: `TransactWriteItems` = inbox + centinela (`attribute_not_exists`) + ti
   `QR_SIGNING_KEY_PATH`; JWKS público = clave activa + `QR_PREVIOUS_JWKS_PATH`. Nunca datos personales en el QR.
 - Validación: `ORGANIZER` del evento (`organizerId`/`staffUserIds` copiados del comando) o `ADMIN`; ventana `startsAt − 2 h … fin`
   (si no hay fin, `startsAt + 12 h`); orden de errores: firma (422) → evento (422) → 404 → 403 → 409 (usado/anulado) → ventana (422).
-- **Divergencia de contrato**: el comando `issue-ticket` del AsyncAPI no trae `organizerId`, `staffUserIds` ni `eventEndsAt` (PROPUESTA 3 de UC-14,
-  y events-service todavía no los envía). Se aceptan como opcionales; si faltan, cualquier `ORGANIZER` puede validar salvo `STRICT_ORGANIZER_CHECK=true`.
+- El comando `issue-ticket` trae `organizerId`, `staffUserIds` y `eventEndsAt` (events-service los envía desde el snapshot de la SAGA; se persisten en el ticket).
+  `STRICT_ORGANIZER_CHECK` es `true` por defecto: un ticket sin datos de organizador (emitido antes de este cambio) solo lo valida un `ADMIN`; con `false` (legado) cualquier `ORGANIZER` puede.
 - `VALIDATION_WINDOW_CLOSED` no está en `@bandada/i18n/errors` ni en el OpenAPI (sí en UC-14/PROPUESTA 5): el texto es local.
 - Un `ConcurrentTransitionError` dentro del consumidor se reintenta por la cola de espera (5 s), no se pierde.
 - `CHAOS_TICKETING_FAIL=true` hace fallar **toda** emisión con `ticket-issue-failed`. Nunca en producción.
