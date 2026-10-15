@@ -634,6 +634,58 @@ class EventsIntegrationTest {
     }
 
     @Test
+    void internalRoutesRequireTheScopeOfTheMethod() throws Exception {
+        String readOnly = neighbours.serviceTokenWithScope("internal:read");
+        String writeOnly = neighbours.serviceTokenWithScope("internal:write");
+        String none = neighbours.serviceTokenWithScope(null);
+        String actor = UUID.randomUUID().toString();
+        assertThat(call("GET", "/internal/v1/sagas", null, readOnly).status()).isEqualTo(200);
+        assertThat(call("GET", "/internal/v1/sagas", null, writeOnly).status()).isEqualTo(403);
+        Resp noScope = call("GET", "/internal/v1/sagas", null, none);
+        assertThat(noScope.status()).isEqualTo(403);
+        assertThat(noScope.body().get("code")).isEqualTo("FORBIDDEN");
+        String sagaId = UUID.randomUUID().toString();
+        assertThat(call("POST", "/internal/v1/sagas/" + sagaId + "/retry", null, readOnly, "X-Actor-Id", actor).status()).isEqualTo(403);
+        assertThat(call("POST", "/internal/v1/sagas/" + sagaId + "/retry", null, writeOnly, "X-Actor-Id", actor).status()).isEqualTo(404);
+    }
+
+    @Test
+    void endsAtIsAcceptedValidatedAndExposed() throws Exception {
+        Instant starts = Instant.now().plus(Duration.ofDays(3)).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant ends = starts.plus(Duration.ofHours(5));
+        Resp explicit = call("POST", "/api/v1/events", Map.of("title", "Taller con fin", "description", "d", "startsAt", starts.toString(),
+                "endsAt", ends.toString(), "venue", "Aula", "capacity", 5, "priceCredits", 0), organizer(), "Idempotency-Key", key());
+        assertThat(explicit.status()).isEqualTo(201);
+        assertThat(Instant.parse((String) explicit.body().get("endsAt"))).isEqualTo(ends);
+        String id = (String) explicit.body().get("id");
+        assertThat(Instant.parse((String) call("GET", "/api/v1/events/" + id, null, organizer()).body().get("endsAt"))).isEqualTo(ends);
+
+        Resp byDefault = call("POST", "/api/v1/events", Map.of("title", "Taller sin fin", "description", "d", "startsAt", starts.toString(),
+                "venue", "Aula", "capacity", 5, "priceCredits", 0), organizer(), "Idempotency-Key", key());
+        assertThat(Instant.parse((String) byDefault.body().get("endsAt"))).isEqualTo(starts.plus(Duration.ofHours(2)));
+
+        Resp bad = call("POST", "/api/v1/events", Map.of("title", "Taller fin malo", "description", "d", "startsAt", starts.toString(),
+                "endsAt", starts.toString(), "venue", "Aula", "capacity", 5, "priceCredits", 0), organizer(), "Idempotency-Key", key());
+        assertThat(bad.status()).isEqualTo(400);
+        assertThat(bad.body().get("code")).isEqualTo("VALIDATION_FAILED");
+    }
+
+    @Test
+    void internalGetEventReturnsAnyEventWithoutVisibilityFilter() throws Exception {
+        Resp draft = call("POST", "/api/v1/events", Map.of("title", "Borrador interno", "description", "d",
+                "startsAt", Instant.now().plus(Duration.ofDays(3)).toString(), "venue", "Aula", "capacity", 5, "priceCredits", 0),
+                organizer(), "Idempotency-Key", key());
+        String id = (String) draft.body().get("id");
+        String svc = neighbours.internalToken();
+        assertThat(call("GET", "/api/v1/events/" + id, null, student(UUID.randomUUID())).status()).isEqualTo(404);
+        Resp internal = call("GET", "/internal/v1/events/" + id, null, svc);
+        assertThat(internal.status()).isEqualTo(200);
+        assertThat(internal.body()).containsEntry("id", id).containsEntry("status", "DRAFT").containsKey("endsAt");
+        assertThat(call("GET", "/internal/v1/events/" + UUID.randomUUID(), null, svc).status()).isEqualTo(404);
+        assertThat(call("GET", "/internal/v1/events/" + id, null, student(UUID.randomUUID())).status()).isEqualTo(403);
+    }
+
+    @Test
     void problemDetailsAreLocalizedAndHealthIsUp() throws Exception {
         Resp es = call("GET", "/api/v1/events/" + UUID.randomUUID(), null, organizer());
         assertThat(es.status()).isEqualTo(404);

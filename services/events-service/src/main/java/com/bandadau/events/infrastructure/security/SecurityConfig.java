@@ -9,6 +9,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -54,6 +61,13 @@ public class SecurityConfig {
             Collection<GrantedAuthority> authorities = new ArrayList<>();
             if ("service".equals(jwt.getClaimAsString("typ"))) {
                 authorities.add(new SimpleGrantedAuthority("ROLE_SERVICE"));
+                // `scope` is a space-separated string (RFC 8693 / seguridad-y-sso.md 2.1): internal:read internal:write.
+                String scope = jwt.getClaimAsString("scope");
+                if (scope != null) {
+                    for (String s : scope.trim().split("\\s+")) {
+                        if (!s.isEmpty()) authorities.add(new SimpleGrantedAuthority("SCOPE_" + s));
+                    }
+                }
             } else {
                 authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
                 List<String> roles = jwt.getClaimAsStringList("roles");
@@ -64,9 +78,27 @@ public class SecurityConfig {
         return converter;
     }
 
+    /**
+     * /internal/**: token de servicio (ROLE_SERVICE) y, con INTERNAL_SCOPES_ENFORCED, el scope por método (D-7):
+     * GET/HEAD/OPTIONS -> internal:read; POST/PUT/PATCH/DELETE -> internal:write. Si falta: 403 FORBIDDEN.
+     */
+    static AuthorizationManager<RequestAuthorizationContext> internalAccess(boolean scopesEnforced) {
+        return (authentication, context) -> {
+            Authentication auth = authentication.get();
+            if (auth == null || !auth.isAuthenticated()) return new AuthorizationDecision(false);
+            Set<String> granted = auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toSet());
+            if (!granted.contains("ROLE_SERVICE")) return new AuthorizationDecision(false);
+            if (!scopesEnforced) return new AuthorizationDecision(true);
+            String method = context.getRequest().getMethod();
+            boolean read = "GET".equals(method) || "HEAD".equals(method) || "OPTIONS".equals(method);
+            return new AuthorizationDecision(granted.contains(read ? "SCOPE_internal:read" : "SCOPE_internal:write"));
+        };
+    }
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter converter, ProblemFactory problems,
-                                            IdempotencyStore store, ObjectMapper mapper) throws Exception {
+                                            IdempotencyStore store, ObjectMapper mapper,
+                                            @Value("${bandada.security.internal-scopes-enforced:true}") boolean scopesEnforced) throws Exception {
         RequestMatcher publicList = request -> "GET".equals(request.getMethod())
                 && "/api/v1/events".equals(request.getRequestURI()) && "true".equals(request.getParameter("public"));
         http
@@ -79,7 +111,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/health/**").permitAll()
                         .requestMatchers(publicList).permitAll()
-                        .requestMatchers("/internal/**").hasRole("SERVICE")
+                        .requestMatchers("/internal/**").access(internalAccess(scopesEnforced))
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/events", "/api/v1/events/*/publish")
                         .hasRole("ORGANIZER")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/events/*/cancel")

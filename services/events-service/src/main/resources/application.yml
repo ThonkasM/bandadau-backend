@@ -91,4 +91,6 @@ bandada:
     batch-size: 100
   rabbit:
     declare-topology: ${RABBIT_DECLARE_TOPOLOGY:false}
+  security:
+    internal-scopes-enforced: ${INTERNAL_SCOPES_ENFORCED:true}
   default-locale: ${DEFAULT_LOCALE:es}

@@ -18,6 +18,7 @@ public final class Dtos {
             @NotNull @Size(max = 5000) String description,
             UUID coverMediaId,
             @NotNull Instant startsAt,
+            Instant endsAt,
             @NotBlank @Size(min = 3, max = 200) String venue,
             @NotNull @Min(1) @Max(10000) Integer capacity,
             @NotNull @PositiveOrZero Long priceCredits) { }
@@ -25,19 +26,19 @@ public final class Dtos {
     public record CancelEventRequest(@NotBlank @Size(min = 3, max = 500) String reason) { }
 
     public record EventResponse(UUID id, UUID organizerId, String title, String description, UUID coverMediaId,
-                                String coverUrl, Instant startsAt, String venue, int capacity, int seatsTaken,
+                                String coverUrl, Instant startsAt, Instant endsAt, String venue, int capacity, int seatsTaken,
                                 int seatsAvailable, long priceCredits, String status, Instant publishedAt,
                                 Instant createdAt, Instant updatedAt) {
         public static EventResponse from(Event e, String coverUrl) {
             return new EventResponse(e.id().value(), e.organizerId(), e.title(), e.description(), e.coverMediaId(),
-                    coverUrl, e.schedule().startsAt(), e.venue(), e.capacity().value(), e.seatsTaken(),
+                    coverUrl, e.schedule().startsAt(), e.schedule().endsAt(), e.venue(), e.capacity().value(), e.seatsTaken(),
                     e.seatsAvailable(), e.price().value(), e.status().name(), e.publishedAt(), e.createdAt(), e.updatedAt());
         }
     }
 
-    public record EventSummary(UUID id, String title, Instant startsAt, String venue) {
+    public record EventSummary(UUID id, String title, Instant startsAt, Instant endsAt, String venue) {
         public static EventSummary from(Event e) {
-            return new EventSummary(e.id().value(), e.title(), e.schedule().startsAt(), e.venue());
+            return new EventSummary(e.id().value(), e.title(), e.schedule().startsAt(), e.schedule().endsAt(), e.venue());
         }
     }
 

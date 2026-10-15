@@ -44,7 +44,7 @@ public class EventController {
     public ResponseEntity<EventResponse> createEvent(@Valid @RequestBody CreateEventRequest body, @AuthenticationPrincipal Jwt jwt,
                                                      @RequestHeader("Idempotency-Key") UUID key) {
         Event event = service.create(new CreateEventCommand(Callers.id(jwt), Callers.university(jwt), body.title(),
-                body.description(), body.coverMediaId(), body.startsAt(), body.venue(), body.capacity(),
+                body.description(), body.coverMediaId(), body.startsAt(), body.endsAt(), body.venue(), body.capacity(),
                 body.priceCredits(), MDC.get("correlationId")));
         return ResponseEntity.created(URI.create("/api/v1/events/" + event.id())).body(view(event));
     }

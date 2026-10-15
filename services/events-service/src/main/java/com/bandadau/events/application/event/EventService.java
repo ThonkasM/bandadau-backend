@@ -14,6 +14,7 @@ import com.bandadau.events.domain.shared.DomainEvent;
 import com.bandadau.events.domain.shared.Errors;
 import com.bandadau.events.domain.shared.Page;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -49,10 +50,11 @@ public class EventService {
         if (c.coverMediaId() != null) media.ensureApprovedCover(c.coverMediaId(), c.organizerId());
         return tx.run(() -> {
             var now = clock.now();
-            // The contract carries no end time: endsAt = startsAt + configured default duration.
+            // endsAt is optional in the contract: when missing, startsAt + configured default duration.
+            Instant endsAt = c.endsAt() != null ? c.endsAt() : c.startsAt().plus(defaultDuration);
             Event event = Event.create(new EventId(ids.newId()), c.organizerId(), c.universityId(), c.title().trim(),
                     c.description(), c.coverMediaId(), c.venue().trim(),
-                    new EventSchedule(c.startsAt(), c.startsAt().plus(defaultDuration)), new Capacity(c.capacity()),
+                    new EventSchedule(c.startsAt(), endsAt), new Capacity(c.capacity()),
                     new Credits(c.priceCredits()), now);
             events.insert(event);
             return event;
@@ -104,6 +106,11 @@ public class EventService {
             throw Errors.eventNotFound();
         }
         return event;
+    }
+
+    /** Internal read (service-token): any organizer, any status; no public-visibility filtering. */
+    public Event getAny(EventId id) {
+        return events.findById(id).orElseThrow(Errors::eventNotFound);
     }
 
     public Page<Event> list(EventRepository.EventQuery query, String cursor, int limit) {

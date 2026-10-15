@@ -43,7 +43,8 @@ Variables: `.env.example`. Idempotencia HTTP en Postgres (`idempotency_keys`, mi
 ## Puertos y rutas
 
 Dev **7004**. Público `/api/v1/events/**`, `/api/v1/registrations/**`. Interno
-`/internal/v1/sagas` (`listSagas`), `/internal/v1/stats/registrations` (`getRegistrationStats`).
+`/internal/v1/sagas` (`listSagas`), `/internal/v1/events/{eventId}` (`getEventInternal`, sin filtro de visibilidad), `/internal/v1/stats/registrations` (`getRegistrationStats`).
+`/internal/**` exige scope del token de servicio (`INTERNAL_SCOPES_ENFORCED`, por defecto `true`): GET → `internal:read`; POST/PATCH/PUT/DELETE → `internal:write`; si falta, 403 `FORBIDDEN`.
 
 ## Contratos
 
@@ -58,7 +59,7 @@ Dev **7004**. Público `/api/v1/events/**`, `/api/v1/registrations/**`. Interno
   (log `event=saga.compensation.stuck` + métrica); `retrySaga` re-impulsa SAGAs `FAILED` y `COMPENSATING` atascadas. `FAILED` solo por `TICKET_ALREADY_USED`.
   Débito tardío tras terminar → `refund-credits` defensivo. Respuestas fuera de paso / `ALREADY_VOIDED` se ignoran. Inbox `processed_messages` en la misma TX.
 - El comando `issue-ticket` incluye `organizerId` (del Event), `staffUserIds` (`[]`: el Event aún no tiene staff) y `eventEndsAt`, copiados al `SagaContext` (JSONB, sin migración; SAGAs previas sin snapshot omiten `organizerId`/`eventEndsAt`). Con ello ticketing restringe la validación al organizador del evento.
-- El contrato no trae `endsAt`: `endsAt = startsAt + EVENT_DEFAULT_DURATION` (2 h). Se valida el `coverMediaId` (propio, `APPROVED`) en `createEvent` con `COVER_CHECK=on`; `coverUrl` vía `getMediaUrls` (degrada a null).
+- `createEvent` acepta `endsAt` opcional (> `startsAt`, si no `400 VALIDATION_FAILED`); sin él, `endsAt = startsAt + EVENT_DEFAULT_DURATION` (2 h). `Event` y `EventSummary` lo exponen y `issue-ticket` lo envía como `eventEndsAt`. Se valida el `coverMediaId` (propio, `APPROVED`) en `createEvent` con `COVER_CHECK=on`; `coverUrl` vía `getMediaUrls` (degrada a null).
 - Códigos del contrato: `INVALID_REGISTRATION_STATUS`, `CANCELLATION_WINDOW_CLOSED`, `MEDIA_NOT_APPROVED`, `INVALID_EVENT_STATUS`.
 - Evento cancelado por el organizador/ADMIN: una SAGA `CANCELLATION` por inscripción `CONFIRMED` (lotes de 50); inscripciones en vuelo se cancelan al confirmarse.
 - Los chaos flags (`CHAOS_TICKETING_FAIL`, `CHAOS_WALLET_DELAY_MS`) viven en ticketing/wallet; aquí solo existe el timeout. En las pruebas, los participantes simulados implementan esos comportamientos.

@@ -1,11 +1,13 @@
 package com.bandadau.events.interfaces.internal;
 
+import com.bandadau.events.application.port.MediaCatalog;
 import com.bandadau.events.application.port.RegistrationStatsQuery;
 import com.bandadau.events.application.port.RegistrationStatsQuery.Counts;
 import com.bandadau.events.application.registration.RegistrationService;
 import com.bandadau.events.application.saga.RegistrationSagaOrchestrator;
 import com.bandadau.events.application.saga.SagaQueries;
 import com.bandadau.events.application.event.EventService;
+import com.bandadau.events.domain.event.Event;
 import com.bandadau.events.domain.event.EventId;
 import com.bandadau.events.domain.event.EventRepository.EventQuery;
 import com.bandadau.events.domain.event.EventStatus;
@@ -35,14 +37,16 @@ public class InternalController {
     private final EventService events;
     private final RegistrationService registrations;
     private final RegistrationStatsQuery stats;
+    private final MediaCatalog media;
 
     public InternalController(SagaQueries sagaQueries, RegistrationSagaOrchestrator orchestrator, EventService events,
-                              RegistrationService registrations, RegistrationStatsQuery stats) {
+                              RegistrationService registrations, RegistrationStatsQuery stats, MediaCatalog media) {
         this.sagaQueries = sagaQueries;
         this.orchestrator = orchestrator;
         this.events = events;
         this.registrations = registrations;
         this.stats = stats;
+        this.media = media;
     }
 
     private static int limit(int limit) {
@@ -73,6 +77,13 @@ public class InternalController {
                                                           @RequestParam(defaultValue = "20") int limit) {
         return PageResponse.from(events.list(new EventQuery(startsFrom, startsTo, status, null), cursor, limit(limit)),
                 e -> EventResponse.from(e, null));
+    }
+
+    @GetMapping("/events/{eventId}")
+    public EventResponse getEventInternal(@PathVariable UUID eventId) {
+        Event event = events.getAny(new EventId(eventId));
+        String url = event.coverMediaId() == null ? null : media.coverUrls(List.of(event.coverMediaId())).get(event.coverMediaId());
+        return EventResponse.from(event, url);
     }
 
     @GetMapping("/events/{eventId}/registrations")

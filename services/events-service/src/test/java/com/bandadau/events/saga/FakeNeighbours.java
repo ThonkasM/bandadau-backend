@@ -83,6 +83,14 @@ public class FakeNeighbours implements AutoCloseable {
 
     public String internalToken() { return serviceToken(); }
 
+    /** Service token with an explicit {@code scope} claim (null = claim absent). */
+    public String serviceTokenWithScope(String scope) {
+        JWTClaimsSet.Builder b = new JWTClaimsSet.Builder().issuer(ISSUER).subject("events-service").audience("bandada-internal")
+                .claim("typ", "service");
+        if (scope != null) b.claim("scope", scope);
+        return sign(b);
+    }
+
     private String sign(JWTClaimsSet.Builder claims) {
         try {
             JWTClaimsSet set = claims.issueTime(new Date()).expirationTime(Date.from(Instant.now().plusSeconds(600)))

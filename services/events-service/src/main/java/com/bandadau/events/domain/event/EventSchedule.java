@@ -9,7 +9,7 @@ public record EventSchedule(Instant startsAt, Instant endsAt) {
     public EventSchedule {
         Objects.requireNonNull(startsAt);
         Objects.requireNonNull(endsAt);
-        if (!startsAt.isBefore(endsAt)) throw Errors.validation("startsAt", "INVALID_FORMAT");
+        if (!startsAt.isBefore(endsAt)) throw Errors.validation("endsAt", "INVALID_VALUE");
     }
 
     public boolean hasStarted(Instant now) { return !now.isBefore(startsAt); }
