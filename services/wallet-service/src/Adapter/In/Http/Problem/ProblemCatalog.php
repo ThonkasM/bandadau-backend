@@ -37,6 +37,7 @@ final class ProblemCatalog
         'RATE_LIMITED' => 429,
         'INTERNAL_ERROR' => 500,
         'DEPENDENCY_UNAVAILABLE' => 503,
+        'PAYMENT_GATEWAY_UNAVAILABLE' => 503,
     ];
 
     public static function status(string $code): int

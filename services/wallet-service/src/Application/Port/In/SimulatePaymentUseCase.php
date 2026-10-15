@@ -8,6 +8,6 @@ use Bandada\Wallet\Domain\Event\EventContext;
 
 interface SimulatePaymentUseCase
 {
-    /** @param 'PAID'|'FAILED' $outcome */
+    /** @param 'PAID'|'FAILED'|'UNAVAILABLE' $outcome */
     public function handle(string $userId, string $topUpId, string $outcome, EventContext $context): TopUpView;
 }

@@ -29,5 +29,6 @@ return [
     'INVALID_OPERATION_REF' => ['title' => 'Invalid operation reference', 'detail' => 'The operation reference is not valid.'],
     'RATE_LIMITED' => ['title' => 'Too many requests', 'detail' => 'You have made too many requests. Please try again later.'],
     'INTERNAL_ERROR' => ['title' => 'Internal error', 'detail' => 'An unexpected error occurred. We are looking into it.'],
+    'PAYMENT_GATEWAY_UNAVAILABLE' => ['title' => 'Payment gateway unavailable', 'detail' => 'The payment gateway is not responding right now. You were not charged; please try again in a few minutes.'],
     'DEPENDENCY_UNAVAILABLE' => ['title' => 'Service unavailable', 'detail' => 'A dependency is temporarily unavailable. Please try again later.'],
 ];

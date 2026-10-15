@@ -62,7 +62,7 @@ final readonly class TopUpController
     {
         $this->assertUuid($topUpId);
         $input = JsonBody::parse($request->getContent(), allowEmpty: true);
-        $rules = ['outcome' => ['sometimes', 'string', Rule::in(['PAID', 'FAILED'])]];
+        $rules = ['outcome' => ['sometimes', 'string', Rule::in(['PAID', 'FAILED', 'UNAVAILABLE'])]];
         foreach (array_diff(array_keys($input), ['outcome']) as $unknown) {
             $rules[(string) $unknown] = ['prohibited'];
         }
@@ -71,7 +71,11 @@ final readonly class TopUpController
         $topUp = $this->simulatePayment->handle(
             $this->principal($request)->subject,
             $topUpId,
-            ($body['outcome'] ?? 'PAID') === 'FAILED' ? 'FAILED' : 'PAID',
+            match ($body['outcome'] ?? 'PAID') {
+                'FAILED' => 'FAILED',
+                'UNAVAILABLE' => 'UNAVAILABLE',
+                default => 'PAID',
+            },
             new EventContext((string) $request->attributes->get('correlationId'), null, null, (string) $request->attributes->get('traceparent')),
         );
 

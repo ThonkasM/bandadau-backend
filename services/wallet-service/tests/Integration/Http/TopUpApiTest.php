@@ -185,3 +185,31 @@ it('lists ledger entries newest first with a cursor, a type filter and localized
     $this->getJson('/api/v1/wallet/me/entries?limit=51', $this->auth())->assertStatus(400)->assertJsonPath('code', 'VALIDATION_FAILED');
     $this->getJson('/api/v1/wallet/me/entries?type=GIFT', $this->auth())->assertStatus(400);
 });
+
+it('PAYMENT_GATEWAY_MODE=unavailable: createTopUp answers 503 PAYMENT_GATEWAY_UNAVAILABLE without persisting any top-up', function () {
+    config(['wallet.payment.gateway_mode' => 'unavailable']);
+
+    $down = $this->createTopUp('CREDITS_20');
+    $down->assertStatus(503)->assertJsonPath('code', 'PAYMENT_GATEWAY_UNAVAILABLE')->assertHeader('Retry-After', '30');
+    expect($down->headers->get('Content-Type'))->toContain('application/problem+json')->and(DB::table('top_ups')->count())->toBe(0);
+});
+
+it('PAYMENT_GATEWAY_MODE=unavailable: simulate-payment answers 503 and the top-up stays PENDING', function () {
+    $topUpId = $this->createTopUp('CREDITS_20')->json('topUpId');
+    config(['wallet.payment.gateway_mode' => 'unavailable']);
+    app()->forgetInstance(PaymentGateway::class);
+
+    $this->postJson("/api/v1/wallet/topups/{$topUpId}/simulate-payment", [], $this->auth())->assertStatus(503)->assertJsonPath('code', 'PAYMENT_GATEWAY_UNAVAILABLE');
+    expect(DB::table('top_ups')->where('id', $topUpId)->value('status'))->toBe('PENDING');
+});
+
+it('simulate-payment with outcome UNAVAILABLE answers 503, leaves the top-up PENDING and it can still be paid afterwards', function () {
+    $topUpId = $this->createTopUp('CREDITS_20')->json('topUpId');
+
+    $this->postJson("/api/v1/wallet/topups/{$topUpId}/simulate-payment", ['outcome' => 'UNAVAILABLE'], $this->auth())
+        ->assertStatus(503)->assertJsonPath('code', 'PAYMENT_GATEWAY_UNAVAILABLE')->assertHeader('Retry-After', '30');
+    expect(DB::table('top_ups')->where('id', $topUpId)->value('status'))->toBe('PENDING');
+
+    $this->postJson("/api/v1/wallet/topups/{$topUpId}/simulate-payment", [], $this->auth())->assertOk()->assertJsonPath('status', 'PAID');
+    expect(DB::table('ledger_entries')->count())->toBe(1);
+});

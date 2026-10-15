@@ -11,6 +11,7 @@ use Bandada\Wallet\Domain\Event\TopUpPaid;
 use Bandada\Wallet\Domain\Exception\AmountMismatchException;
 use Bandada\Wallet\Domain\Exception\ForbiddenOperationException;
 use Bandada\Wallet\Domain\Exception\InvalidTopUpPackageException;
+use Bandada\Wallet\Domain\Exception\PaymentGatewayUnavailableException;
 use Bandada\Wallet\Domain\Exception\SimulatorDisabledException;
 use Bandada\Wallet\Domain\Exception\TopUpNotFoundException;
 use Bandada\Wallet\Domain\Exception\TopUpNotPendingException;
@@ -121,4 +122,17 @@ it('does not simulate when the simulator is disabled, for strangers, or on settl
 
     $this->simulate->handle(Support::USER, $topUp->id, 'PAID', EventContext::none());
     expect(fn () => $this->simulate->handle(Support::USER, $topUp->id, 'FAILED', EventContext::none()))->toThrow(TopUpNotPendingException::class);
+});
+
+it('reports the gateway as unavailable: createTopUp persists nothing and simulate-payment keeps the top-up pending', function () {
+    $down = new SimulatedPaymentGateway('http://x', true, SimulatedPaymentGateway::MODE_UNAVAILABLE);
+    $create = new CreateTopUpService($this->world, $down, $this->world, $this->clock, $this->ids, ['CREDITS_20', 'CREDITS_50', 'CREDITS_100'], 30);
+    expect(fn () => $create->handle(new CreateTopUpCommand(Support::USER, 'CREDITS_20', KEY)))->toThrow(PaymentGatewayUnavailableException::class);
+    expect($this->world->findByUserAndIdempotencyKey(Support::USER, KEY))->toBeNull();
+
+    $topUp = $this->create->handle(new CreateTopUpCommand(Support::USER, 'CREDITS_20', KEY))->topUp;
+    $simulateDown = new SimulatePaymentService($this->world, $down, $this->webhook, $this->clock, $this->ids);
+    expect(fn () => $simulateDown->handle(Support::USER, $topUp->id, 'PAID', EventContext::none()))->toThrow(PaymentGatewayUnavailableException::class)
+        ->and(fn () => $this->simulate->handle(Support::USER, $topUp->id, 'UNAVAILABLE', EventContext::none()))->toThrow(PaymentGatewayUnavailableException::class)
+        ->and($this->world->find($topUp->id)?->status())->toBe(TopUpStatus::Pending);
 });

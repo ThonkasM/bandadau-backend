@@ -128,6 +128,7 @@ class WalletServiceProvider extends ServiceProvider
         $this->app->bind(PaymentGateway::class, fn (): PaymentGateway => new SimulatedPaymentGateway(
             (string) config('wallet.payment.checkout_base_url'),
             (bool) config('wallet.payment.simulator_enabled'),
+            (string) config('wallet.payment.gateway_mode'),
         ));
         $this->app->bind(EventPublisher::class, fn (Application $app): EventPublisher => new OutboxEventPublisher(
             $app->make(ConnectionInterface::class),

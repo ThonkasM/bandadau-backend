@@ -38,6 +38,9 @@ final readonly class CreateTopUpService implements CreateTopUpUseCase
             throw new InvalidTopUpPackageException($command->package);
         }
 
+        // UC-15 5a: with the gateway down nothing is persisted, so a retry with the same Idempotency-Key starts clean.
+        $this->gateway->assertAvailable();
+
         // Business-level idempotency (D3 mechanism 3): one top-up per (user, Idempotency-Key).
         $existing = $this->topUps->findByUserAndIdempotencyKey($command->userId, $command->idempotencyKey);
         if ($existing !== null) {

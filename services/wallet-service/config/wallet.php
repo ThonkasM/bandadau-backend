@@ -13,6 +13,8 @@ return [
     ],
 
     'payment' => [
+        // `simulate` (default) | `unavailable`: the simulated gateway fails every createTopUp/simulate-payment with 503 PAYMENT_GATEWAY_UNAVAILABLE (UC-15 5a demo).
+        'gateway_mode' => (string) env('PAYMENT_GATEWAY_MODE', 'simulate'),
         'simulator_enabled' => $bool('PAYMENT_SIMULATOR_ENABLED', false),
         'webhook_secret' => (string) env('PAYMENT_WEBHOOK_SECRET', ''),
         'webhook_tolerance_seconds' => (int) env('PAYMENT_WEBHOOK_TOLERANCE_SECONDS', 300),

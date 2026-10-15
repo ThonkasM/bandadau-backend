@@ -33,6 +33,9 @@ final readonly class ProblemDetailsRenderer
         } elseif ($e instanceof DomainException) {
             $code = $e->errorCode();
             $params = $e->params();
+            if ($code === 'PAYMENT_GATEWAY_UNAVAILABLE') {
+                $headers = ['Retry-After' => '30'];
+            }
         } elseif ($e instanceof DependencyUnavailableException) {
             $code = 'DEPENDENCY_UNAVAILABLE';
             $headers = ['Retry-After' => '5'];

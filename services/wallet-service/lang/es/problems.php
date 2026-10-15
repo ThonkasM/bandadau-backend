@@ -29,5 +29,6 @@ return [
     'INVALID_OPERATION_REF' => ['title' => 'Referencia de operación inválida', 'detail' => 'La referencia de operación no es válida.'],
     'RATE_LIMITED' => ['title' => 'Demasiadas peticiones', 'detail' => 'Has hecho demasiadas peticiones. Intenta de nuevo más tarde.'],
     'INTERNAL_ERROR' => ['title' => 'Error interno', 'detail' => 'Ocurrió un error inesperado. Ya lo estamos revisando.'],
+    'PAYMENT_GATEWAY_UNAVAILABLE' => ['title' => 'Pasarela de pago no disponible', 'detail' => 'La pasarela de pago no responde en este momento. No se realizó ningún cobro; intenta de nuevo en unos minutos.'],
     'DEPENDENCY_UNAVAILABLE' => ['title' => 'Servicio no disponible', 'detail' => 'Una dependencia no está disponible en este momento. Intenta más tarde.'],
 ];

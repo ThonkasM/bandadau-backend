@@ -47,14 +47,14 @@ Roles de la imagen (misma imagen): `web` (por defecto; migra y levanta nginx+php
 ## Variables (ver `.env.example`)
 
 `DB_*`, `RABBITMQ_URL`, `RABBITMQ_DECLARE_TOPOLOGY` (false; true solo dev/tests), `JWKS_URL`, `JWT_ISSUER`,
-`PAYMENT_WEBHOOK_SECRET` (≥16 car.), `PAYMENT_SIMULATOR_ENABLED`, `PAYMENT_CHECKOUT_BASE_URL`, `TOPUP_PACKAGES`,
+`PAYMENT_WEBHOOK_SECRET` (≥16 car.), `PAYMENT_SIMULATOR_ENABLED`, `PAYMENT_GATEWAY_MODE` (`simulate`|`unavailable`; D-14: en `unavailable`, `createTopUp` y `simulateTopUpPayment` responden 503 `PAYMENT_GATEWAY_UNAVAILABLE` con `Retry-After: 30` y no se persiste nada; también `outcome: UNAVAILABLE` en `simulate-payment` da el 503 dejando la recarga PENDING; prohibido en producción), `PAYMENT_CHECKOUT_BASE_URL`, `TOPUP_PACKAGES`,
 `TOPUP_TTL_MINUTES`, `IDEMPOTENCY_TABLE`, `DYNAMODB_ENDPOINT`, `AWS_*`, `CORS_ORIGINS`, `CHAOS_WALLET_DELAY_MS`
 (debe ser 0 en producción), `LOG_CHANNEL` (`stdout` | `stderr`). El arranque valida el entorno y falla rápido.
 
 ## Endpoints
 
 Implementados: `getMyWallet`, `listMyLedgerEntries`, `createTopUp` (Idempotency-Key), `getTopUp`, `simulateTopUpPayment`
-(404 si `PAYMENT_SIMULATOR_ENABLED=false`), `paymentWebhook` (HMAC `X-Signature: sha256=<hex>`, ventana anti-replay 5 min sobre
+(404 si `PAYMENT_SIMULATOR_ENABLED=false`; `outcome` `PAID`|`FAILED`|`UNAVAILABLE`), `paymentWebhook` (HMAC `X-Signature: sha256=<hex>`, ventana anti-replay 5 min sobre
 `occurredAt`, 200 + `duplicate:true` en repetidos), `getCreditStats` (`/internal/v1/stats/credits`, token de servicio `internal:read`),
 `/health/live`, `/health/ready` (Postgres, RabbitMQ, DynamoDB). Diferido: limitación de tasa por usuario (429), exportador OTLP
 (solo se propaga `traceparent`).

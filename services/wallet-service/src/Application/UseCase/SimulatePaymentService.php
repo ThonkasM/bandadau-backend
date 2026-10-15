@@ -14,6 +14,7 @@ use Bandada\Wallet\Application\Port\Out\PaymentGateway;
 use Bandada\Wallet\Application\Port\Out\TopUpRepository;
 use Bandada\Wallet\Domain\Event\EventContext;
 use Bandada\Wallet\Domain\Exception\ForbiddenOperationException;
+use Bandada\Wallet\Domain\Exception\PaymentGatewayUnavailableException;
 use Bandada\Wallet\Domain\Exception\SimulatorDisabledException;
 use Bandada\Wallet\Domain\Exception\TopUpNotFoundException;
 use Bandada\Wallet\Domain\Exception\TopUpNotPendingException;
@@ -38,6 +39,12 @@ final readonly class SimulatePaymentService implements SimulatePaymentUseCase
         $topUp = $this->topUps->find($topUpId) ?? throw new TopUpNotFoundException($topUpId);
         if ($topUp->userId !== $userId) {
             throw new ForbiddenOperationException('Top-up belongs to another user');
+        }
+
+        // UC-15 5a: `outcome: UNAVAILABLE` (or PAYMENT_GATEWAY_MODE=unavailable) plays a gateway that does not answer; the top-up stays as it was.
+        $this->gateway->assertAvailable();
+        if ($outcome === 'UNAVAILABLE') {
+            throw new PaymentGatewayUnavailableException;
         }
 
         $now = $this->clock->now();

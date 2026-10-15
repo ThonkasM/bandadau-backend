@@ -40,6 +40,9 @@ class EnvironmentValidator
         if (strlen((string) config('wallet.payment.webhook_secret')) < 16) {
             $problems[] = 'PAYMENT_WEBHOOK_SECRET must have at least 16 characters';
         }
+        if (! in_array((string) config('wallet.payment.gateway_mode'), ['simulate', 'unavailable'], true)) {
+            $problems[] = 'PAYMENT_GATEWAY_MODE must be simulate or unavailable';
+        }
         $allowedPackages = ['CREDITS_20', 'CREDITS_50', 'CREDITS_100'];
         $packages = config('wallet.topup.packages');
         if (! is_array($packages) || $packages === [] || array_diff($packages, $allowedPackages) !== []) {
@@ -52,6 +55,9 @@ class EnvironmentValidator
         if ($production) {
             if (in_array((string) config('wallet.payment.webhook_secret'), ['change-me', 'change-me-webhook-secret'], true)) {
                 $problems[] = 'PAYMENT_WEBHOOK_SECRET must not keep the example value in production';
+            }
+            if ((string) config('wallet.payment.gateway_mode') !== 'simulate') {
+                $problems[] = 'PAYMENT_GATEWAY_MODE must be simulate in production';
             }
             if ((bool) config('wallet.payment.simulator_enabled')) {
                 $problems[] = 'PAYMENT_SIMULATOR_ENABLED must be false in production';
