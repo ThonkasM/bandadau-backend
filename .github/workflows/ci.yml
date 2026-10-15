@@ -69,7 +69,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - if: steps.detect.outputs.present == 'true'
         working-directory: services/${{ matrix.service }}
-        run: ./gradlew spotlessCheck checkstyleMain build   # build = jar + pruebas (Testcontainers + ArchUnit)
+        run: ./gradlew build   # jar + pruebas (Testcontainers + ArchUnit)
       - if: steps.detect.outputs.present == 'true'
         run: docker build services/${{ matrix.service }} -t bandada/${{ matrix.service }}:ci
 
