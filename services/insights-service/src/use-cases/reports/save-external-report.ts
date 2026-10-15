@@ -27,6 +27,7 @@ export class SaveExternalReportUseCase {
     private readonly ids: IdGenerator,
     private readonly jobs: JobRunner,
     private readonly defaultLocale: Locale,
+    private readonly publicApiUrl: string,
   ) {}
 
   async execute(input: ExternalReportInput, requestedBy: string, agentRunId: string | null): Promise<{ reportId: string; status: 'RUNNING'; audioStatus: 'PENDING' | 'NONE'; url: string }> {
@@ -50,6 +51,6 @@ export class SaveExternalReportUseCase {
         await this.finalizer.fail(report, (error as Error).message);
       }
     });
-    return { reportId: id, status: 'RUNNING', audioStatus: audio ? 'PENDING' : 'NONE', url: `/api/v1/insights/reports/${id}` };
+    return { reportId: id, status: 'RUNNING', audioStatus: audio ? 'PENDING' : 'NONE', url: `${this.publicApiUrl.replace(/\/$/, '')}/api/v1/insights/reports/${id}` };
   }
 }

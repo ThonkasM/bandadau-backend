@@ -156,7 +156,7 @@ export class AppModule {
     const raiseAlert = new RaiseAlertUseCase(alerts, clock, ids);
     const kpis = new GetPlatformKpisUseCase(metrics, alerts);
     const anomalies = new DetectAnomaliesUseCase(metrics, detector);
-    const saveExternal = new SaveExternalReportUseCase(reports, finalizer, tts, clock, ids, jobs, config.defaultLocale);
+    const saveExternal = new SaveExternalReportUseCase(reports, finalizer, tts, clock, ids, jobs, config.defaultLocale, config.publicApiUrl);
     const toolService = new McpToolService(platformData, kpis, anomalies, raiseAlert, saveExternal);
     const monitoring = new RunMonitoringUseCase(mcpClients, runs, alerts, locks, llm, promptCatalog, clock, ids, logger, {
       thresholds: config.thresholds,

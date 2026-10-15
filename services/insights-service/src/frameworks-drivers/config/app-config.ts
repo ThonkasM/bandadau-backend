@@ -26,6 +26,7 @@ export interface AppConfig {
   serviceClientId: string;
   serviceClientSecret: string;
   corsOrigins: string[];
+  publicApiUrl: string;
   mcpInternalUrl: string;
   mcpAllowedOrigins: string[];
   mcpServiceClients: string[];
@@ -107,6 +108,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     serviceClientId: env.SERVICE_CLIENT_ID ?? 'insights-service',
     serviceClientSecret: required(env, 'SERVICE_CLIENT_SECRET'),
     corsOrigins: list(env.CORS_ORIGINS),
+    publicApiUrl: env.PUBLIC_API_URL ?? 'http://api.bandada.localhost',
     mcpInternalUrl: env.MCP_INTERNAL_URL ?? `http://127.0.0.1:${port}/mcp`,
     mcpAllowedOrigins: list(env.MCP_ALLOWED_ORIGINS),
     mcpServiceClients: list(env.MCP_SERVICE_CLIENTS ?? 'insights-service'),

@@ -1,12 +1,12 @@
-import { AgentStepLimitError, LlmRefusalError } from '../../../src/entities/errors/domain-errors';
 import { newAgentRun } from '../../../src/entities/agent-run';
+import { AgentStepLimitError, LlmRefusalError } from '../../../src/entities/errors/domain-errors';
 import { REPORT_GUARDRAILS } from '../../../src/entities/policies/agent-guardrails';
 import { AgentLoop } from '../../../src/use-cases/agents/agent-loop';
 import { hashDataset } from '../../../src/use-cases/reports/dataset-hash';
 import { GenerateReportUseCase } from '../../../src/use-cases/reports/generate-report';
 import { limitWords, ReportFinalizer, stripChartStyling } from '../../../src/use-cases/reports/report-finalizer';
 import { RequestReportUseCase } from '../../../src/use-cases/reports/request-report';
-import { FakeClock, FakeMcp, FakeTts, fakePrompts, InlineJobs, MemReports, MemRuns, MemStorage, ScriptedLlm, say, SeqIds, silentLogger, toolUse, TOOL_DEFS, usage } from '../../support/fakes';
+import { FakeClock, FakeMcp, fakePrompts, FakeTts, InlineJobs, MemReports, MemRuns, MemStorage, say, ScriptedLlm, SeqIds, silentLogger, TOOL_DEFS, toolUse, usage } from '../../support/fakes';
 
 const KPIS = { from: '2026-09-16', to: '2026-10-15', activeUsers: 12, newUsers: 22, posts: 8, registrationsConfirmed: 11, creditsSpent: 160, series: [] };
 const COMPOSED = {

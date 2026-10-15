@@ -22,6 +22,7 @@ export const PROBLEM_STATUS: Record<string, number> = {
   NOT_FOUND: 404,
   MALFORMED_REQUEST: 400,
   METHOD_NOT_ALLOWED: 405,
+  PAYLOAD_TOO_LARGE: 413,
   INTERNAL_ERROR: 500,
   SERVICE_UNAVAILABLE: 503,
 };
@@ -40,6 +41,7 @@ export const PROBLEM_MESSAGES: Record<string, Message> = {
   AGENT_STEP_LIMIT: { title: { es: 'Límite del agente alcanzado', en: 'Agent limit reached' }, ...same('El agente alcanzó su límite de pasos o tokens.', 'The agent reached its step or token limit.') },
   NOT_FOUND: { title: { es: 'Recurso no encontrado', en: 'Resource not found' }, ...same('La ruta o el recurso solicitado no existe.', 'The requested route or resource does not exist.') },
   MALFORMED_REQUEST: { title: { es: 'Solicitud malformada', en: 'Malformed request' }, ...same('No se pudo interpretar la solicitud.', 'The request could not be parsed.') },
+  PAYLOAD_TOO_LARGE: { title: { es: 'Solicitud demasiado grande', en: 'Payload too large' }, ...same('El cuerpo de la solicitud supera el límite de 1 MB.', 'The request body exceeds the 1 MB limit.') },
   METHOD_NOT_ALLOWED: { title: { es: 'Método no permitido', en: 'Method not allowed' }, ...same('Este método no está disponible en la ruta.', 'This method is not available on the route.') },
   INTERNAL_ERROR: { title: { es: 'Error interno', en: 'Internal error' }, ...same('Ocurrió un error inesperado.', 'An unexpected error occurred.') },
   SERVICE_UNAVAILABLE: { title: { es: 'Servicio no disponible', en: 'Service unavailable' }, ...same('El servicio no está disponible temporalmente.', 'The service is temporarily unavailable.') },
