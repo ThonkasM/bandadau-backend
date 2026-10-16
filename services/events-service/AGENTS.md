@@ -43,7 +43,7 @@ Variables: `.env.example`. Idempotencia HTTP en Postgres (`idempotency_keys`, mi
 ## Puertos y rutas
 
 Dev **7004**. Público `/api/v1/events/**`, `/api/v1/registrations/**`. Interno
-`/internal/v1/sagas` (`listSagas`), `/internal/v1/events/{eventId}` (`getEventInternal`, sin filtro de visibilidad), `/internal/v1/stats/registrations` (`getRegistrationStats`), `/internal/v1/registrations` (`listRegistrationsInternal`: feed cross-evento, más recientes primero, cursor; MCP `list_recent_registrations`).
+`/internal/v1/sagas` (`listSagas`), `/internal/v1/events/{eventId}` (`getEventInternal`, sin filtro de visibilidad), `/internal/v1/stats/registrations` (`getRegistrationStats`), `/internal/v1/registrations` (`listRegistrationsInternal`: feed cross-evento, más recientes primero, cursor; MCP `list_recent_registrations`), `/internal/v1/stats/event-ranking` (`getEventRanking`: ranking de eventos por inscripciones/ingresos/ocupación sobre CONFIRMED, sin PII; MCP `get_event_ranking`).
 `/internal/**` exige scope del token de servicio (`INTERNAL_SCOPES_ENFORCED`, por defecto `true`): GET → `internal:read`; POST/PATCH/PUT/DELETE → `internal:write`; si falta, 403 `FORBIDDEN`.
 
 ## Contratos

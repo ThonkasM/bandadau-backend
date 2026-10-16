@@ -1,5 +1,6 @@
 package com.bandadau.events.interfaces.internal;
 
+import com.bandadau.events.application.port.EventRankingQuery;
 import com.bandadau.events.application.port.MediaCatalog;
 import com.bandadau.events.application.port.RegistrationFeedQuery;
 import com.bandadau.events.application.port.RegistrationStatsQuery;
@@ -7,6 +8,7 @@ import com.bandadau.events.application.port.RegistrationStatsQuery.Counts;
 import com.bandadau.events.application.registration.RegistrationService;
 import com.bandadau.events.application.saga.RegistrationSagaOrchestrator;
 import com.bandadau.events.application.saga.SagaQueries;
+import com.bandadau.events.application.stats.EventRankingService;
 import com.bandadau.events.application.event.EventService;
 import com.bandadau.events.domain.event.Event;
 import com.bandadau.events.domain.event.EventId;
@@ -40,10 +42,11 @@ public class InternalController {
     private final RegistrationStatsQuery stats;
     private final MediaCatalog media;
     private final RegistrationFeedQuery feed;
+    private final EventRankingService ranking;
 
     public InternalController(SagaQueries sagaQueries, RegistrationSagaOrchestrator orchestrator, EventService events,
                               RegistrationService registrations, RegistrationStatsQuery stats, MediaCatalog media,
-                              RegistrationFeedQuery feed) {
+                              RegistrationFeedQuery feed, EventRankingService ranking) {
         this.sagaQueries = sagaQueries;
         this.orchestrator = orchestrator;
         this.events = events;
@@ -51,6 +54,7 @@ public class InternalController {
         this.stats = stats;
         this.media = media;
         this.feed = feed;
+        this.ranking = ranking;
     }
 
     private static int limit(int limit) {
@@ -115,6 +119,41 @@ public class InternalController {
         return PageResponse.from(feed.list(from, to, status, eventId, cursor, limit(limit)), r -> new RegistrationResponse(
                 r.id(), r.eventId(), r.userId(), new EventSummary(r.eventId(), r.eventTitle(), r.eventStartsAt(), r.eventEndsAt(), r.venue()),
                 r.status().name(), r.failureReason(), r.priceCredits(), r.ticketId(), r.createdAt(), r.updatedAt(), r.confirmedAt(), r.cancelledAt()));
+    }
+
+    /** getEventRanking: events ranked by registrations, revenue or fill rate (aggregates only, no personal data). */
+    @GetMapping("/stats/event-ranking")
+    public Map<String, Object> getEventRanking(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam EventRankingQuery.Metric by,
+            @RequestParam(required = false) String ids,
+            @RequestParam(required = false) Integer limit) {
+        List<EventRankingQuery.Row> rows = ranking.rank(from, to, by, parseIds(ids), limit);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("from", from);
+        out.put("to", to);
+        out.put("by", by.name());
+        out.put("items", rows.stream().map(r -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("eventId", r.eventId());
+            m.put("title", r.title());
+            m.put("value", by == EventRankingQuery.Metric.FILL_RATE ? r.value() : (Object) r.value().longValueExact());
+            m.put("registrations", r.registrations());
+            m.put("capacity", r.capacity());
+            m.put("revenueCredits", r.revenueCredits());
+            return m;
+        }).toList());
+        return out;
+    }
+
+    private static List<UUID> parseIds(String ids) {
+        if (ids == null || ids.isBlank()) return null;
+        try {
+            return java.util.Arrays.stream(ids.split(",")).map(String::trim).filter(x -> !x.isEmpty()).map(UUID::fromString).toList();
+        } catch (IllegalArgumentException e) {
+            throw Errors.validation("ids", "INVALID_FORMAT");
+        }
     }
 
     @GetMapping("/stats/registrations")

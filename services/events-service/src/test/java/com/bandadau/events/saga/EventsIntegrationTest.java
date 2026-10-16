@@ -650,6 +650,33 @@ class EventsIntegrationTest {
         assertThat(call("GET", "/internal/v1/registrations", null, student(user)).status()).isEqualTo(403);
         assertThat(call("GET", "/internal/v1/registrations", null, neighbours.serviceTokenWithScope("internal:write")).status()).isEqualTo(403);
 
+        // ranking: CONFIRMED registrations of the range, per event; ids returns even events without registrations
+        String idle = createPublishedEvent(4, 10);
+        String rk = "/internal/v1/stats/event-ranking?from=" + today + "&to=" + today + "&ids=" + eventId + "," + idle;
+        Resp byRegs = call("GET", rk + "&by=REGISTRATIONS&limit=1", null, svc);
+        assertThat(byRegs.status()).isEqualTo(200);
+        assertThat(byRegs.body()).containsEntry("by", "REGISTRATIONS");
+        @SuppressWarnings("unchecked") List<Map<String, Object>> rank = (List<Map<String, Object>>) byRegs.body().get("items");
+        assertThat(rank).hasSize(2);   // limit ignored with ids
+        assertThat(rank.get(0)).containsEntry("eventId", eventId).containsEntry("registrations", 2).containsEntry("capacity", 10)
+                .containsEntry("revenueCredits", 40).containsEntry("value", 2);
+        assertThat(rank.get(1)).containsEntry("eventId", idle).containsEntry("registrations", 0).containsEntry("value", 0);
+        @SuppressWarnings("unchecked") List<Map<String, Object>> rev = (List<Map<String, Object>>) call("GET", rk + "&by=REVENUE", null, svc).body().get("items");
+        assertThat(((Number) rev.get(0).get("value")).longValue()).isEqualTo(40L);
+        @SuppressWarnings("unchecked") List<Map<String, Object>> fill = (List<Map<String, Object>>) call("GET", rk + "&by=FILL_RATE", null, svc).body().get("items");
+        assertThat(((Number) fill.get(0).get("value")).doubleValue()).isEqualTo(0.2);
+        @SuppressWarnings("unchecked") List<Map<String, Object>> top = (List<Map<String, Object>>) call("GET",
+                "/internal/v1/stats/event-ranking?from=" + today + "&to=" + today + "&by=REGISTRATIONS&limit=3", null, svc).body().get("items");
+        assertThat(top).isNotEmpty().hasSizeLessThanOrEqualTo(3).allMatch(r -> ((Number) r.get("registrations")).intValue() > 0);
+        assertThat(call("GET", "/internal/v1/stats/event-ranking?from=" + today + "&to=" + today + "&by=NOPE", null, svc).status()).isEqualTo(400);
+        assertThat(call("GET", "/internal/v1/stats/event-ranking?from=2026-12-31&to=2026-01-01&by=REVENUE", null, svc).status()).isEqualTo(400);
+        assertThat(call("GET", "/internal/v1/stats/event-ranking?from=2026-01-01&to=2028-01-01&by=REVENUE", null, svc).status()).isEqualTo(400);
+        assertThat(call("GET", "/internal/v1/stats/event-ranking?from=" + today + "&to=" + today + "&by=REVENUE&limit=51", null, svc).status()).isEqualTo(400);
+        assertThat(call("GET", "/internal/v1/stats/event-ranking?from=" + today + "&to=" + today + "&by=REVENUE&ids=zzz", null, svc).status()).isEqualTo(400);
+        assertThat(call("GET", rk + "&by=REVENUE", null, null).status()).isEqualTo(401);
+        assertThat(call("GET", rk + "&by=REVENUE", null, student(user)).status()).isEqualTo(403);
+        assertThat(call("GET", rk + "&by=REVENUE", null, neighbours.serviceTokenWithScope("internal:write")).status()).isEqualTo(403);
+
         Resp evs = call("GET", "/internal/v1/events?status=PUBLISHED", null, svc);
         assertThat(evs.status()).isEqualTo(200);
 

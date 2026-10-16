@@ -5,6 +5,7 @@ import com.bandadau.events.application.port.*;
 import com.bandadau.events.application.registration.RegistrationService;
 import com.bandadau.events.application.saga.RegistrationSagaOrchestrator;
 import com.bandadau.events.application.saga.SagaQueries;
+import com.bandadau.events.application.stats.EventRankingService;
 import com.bandadau.events.domain.event.EventRepository;
 import com.bandadau.events.domain.registration.RegistrationRepository;
 import com.bandadau.events.domain.saga.SagaInstanceRepository;
@@ -56,6 +57,10 @@ public class BeanConfig {
     @Bean RegistrationStatsQuery statsQuery(JdbcClient jdbc) { return new JdbcStatsQuery(jdbc); }
 
     @Bean RegistrationFeedQuery registrationFeedQuery(JdbcClient jdbc) { return new JdbcRegistrationFeedQuery(jdbc); }
+
+    @Bean EventRankingQuery eventRankingQuery(JdbcClient jdbc) { return new JdbcEventRankingQuery(jdbc); }
+
+    @Bean EventRankingService eventRankingService(EventRankingQuery query) { return new EventRankingService(query); }
 
     @Bean IntegrationEventOutbox outbox(JdbcClient jdbc, ObjectMapper mapper, IdGenerator ids, Clock clock) {
         return new JdbcOutbox(jdbc, mapper, ids, clock);
