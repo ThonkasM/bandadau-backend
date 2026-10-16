@@ -65,3 +65,7 @@ export class InvalidCursorError extends DomainError {
 export class ConcurrentTransitionError extends DomainError {
   readonly code = 'CONCURRENT_MODIFICATION';
 }
+
+export class InvalidRangeError extends DomainError {
+  readonly code = 'INVALID_RANGE';
+}

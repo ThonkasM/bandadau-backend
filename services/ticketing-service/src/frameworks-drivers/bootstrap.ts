@@ -7,7 +7,7 @@ import type { AppConfig } from './config/app-config';
 /** Shared by `main.ts` and the e2e tests so both run the same HTTP pipeline. */
 export function configureApp(app: INestApplication, config: Pick<AppConfig, 'corsOrigins'>): void {
   const express = app as NestExpressApplication;
-  express.setGlobalPrefix('api/v1', { exclude: ['health/live', 'health/ready'] });
+  express.setGlobalPrefix('api/v1', { exclude: ['health/live', 'health/ready', 'internal/v1/{*path}'] });
   express.use((req: { headers: Record<string, string | undefined> }, res: { setHeader(k: string, v: string): void }, next: () => void) => {
     res.setHeader('Content-Language', resolveLocaleFromAcceptLanguage(req.headers['accept-language']));
     next();

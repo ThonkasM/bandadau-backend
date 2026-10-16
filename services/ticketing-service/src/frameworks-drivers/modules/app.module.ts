@@ -9,14 +9,17 @@ import { MessagingModule } from '@bandada/messaging-ts/nest';
 import { type DynamicModule, Logger, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
+import { InternalStatsController } from '../../interface-adapters/controllers/http/internal-stats.controller';
 import { ProblemFilter } from '../../interface-adapters/controllers/http/problem.filter';
 import { TicketsController } from '../../interface-adapters/controllers/http/tickets.controller';
 import { COMMANDS_QUEUE, TicketingCommandsConsumer } from '../../interface-adapters/controllers/messaging/ticketing-commands.consumer';
 import { JoseQrSigner } from '../../interface-adapters/gateways/crypto/jose-qr-signer.gateway';
 import { DynamoOutboxPublisher } from '../../interface-adapters/gateways/dynamo/dynamo-outbox.publisher';
 import { DynamoTicketRepository } from '../../interface-adapters/gateways/dynamo/dynamo-ticket.repository';
+import { DynamoTicketStatsReader } from '../../interface-adapters/gateways/dynamo/dynamo-ticket-stats.reader';
 import { GetSigningKeysUseCase } from '../../use-cases/get-signing-keys/get-signing-keys.use-case';
 import { GetTicketUseCase } from '../../use-cases/get-ticket/get-ticket.use-case';
+import { GetTicketStatsUseCase } from '../../use-cases/get-ticket-stats/get-ticket-stats.use-case';
 import { IssueTicketUseCase } from '../../use-cases/issue-ticket/issue-ticket.use-case';
 import { ListMyTicketsUseCase } from '../../use-cases/list-my-tickets/list-my-tickets.use-case';
 import { CLOCK,type Clock } from '../../use-cases/ports/clock';
@@ -24,6 +27,7 @@ import { EVENT_PUBLISHER } from '../../use-cases/ports/event-publisher';
 import { ID_GENERATOR,type IdGenerator } from '../../use-cases/ports/id-generator';
 import { type PublicSigningKey, QR_SIGNER,type QrSigner } from '../../use-cases/ports/qr-signer';
 import { TICKET_REPOSITORY,type TicketRepository } from '../../use-cases/ports/ticket.repository';
+import { TICKET_STATS_READER, type TicketStatsReader } from '../../use-cases/ports/ticket-stats.reader';
 import { ValidateTicketUseCase } from '../../use-cases/validate-ticket/validate-ticket.use-case';
 import { VoidTicketUseCase } from '../../use-cases/void-ticket/void-ticket.use-case';
 import type { AppConfig } from '../config/app-config';
@@ -66,7 +70,7 @@ export class AppModule {
           },
         }),
       ],
-      controllers: [TicketsController, HealthController],
+      controllers: [TicketsController, InternalStatsController, HealthController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: DYNAMO_CLIENT, useValue: dynamo },
@@ -115,6 +119,8 @@ export class AppModule {
         { provide: GetTicketUseCase, useFactory: (repo: TicketRepository, signer: QrSigner) => new GetTicketUseCase(repo, signer), inject: [TICKET_REPOSITORY, QR_SIGNER] },
         { provide: ListMyTicketsUseCase, useFactory: (repo: TicketRepository) => new ListMyTicketsUseCase(repo), inject: [TICKET_REPOSITORY] },
         { provide: GetSigningKeysUseCase, useFactory: (signer: QrSigner) => new GetSigningKeysUseCase(signer), inject: [QR_SIGNER] },
+        { provide: TICKET_STATS_READER, useFactory: () => new DynamoTicketStatsReader(doc, config.ticketingTable) },
+        { provide: GetTicketStatsUseCase, useFactory: (reader: TicketStatsReader) => new GetTicketStatsUseCase(reader), inject: [TICKET_STATS_READER] },
         TicketingCommandsConsumer,
       ],
     };

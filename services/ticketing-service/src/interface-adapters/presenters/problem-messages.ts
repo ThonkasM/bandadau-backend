@@ -19,6 +19,7 @@ export const PROBLEM_STATUS: Record<string, number> = {
   FORBIDDEN: 403,
   INVALID_CURSOR: 400,
   VALIDATION_FAILED: 400,
+  INVALID_RANGE: 400,
   CONCURRENT_MODIFICATION: 409,
   NOT_FOUND: 404,
   MALFORMED_REQUEST: 400,
@@ -72,6 +73,10 @@ export const PROBLEM_MESSAGES: Record<string, Message> = {
   VALIDATION_FAILED: {
     title: { es: 'Solicitud no válida', en: 'Invalid request' },
     ...same('Revisa los campos enviados.', 'Check the submitted fields.'),
+  },
+  INVALID_RANGE: {
+    title: { es: 'Rango de fechas no válido', en: 'Invalid date range' },
+    ...same('`from` debe ser anterior o igual a `to` y el rango no puede superar 366 días.', '`from` must be on or before `to` and the range cannot exceed 366 days.'),
   },
   CONCURRENT_MODIFICATION: {
     title: { es: 'Modificación concurrente', en: 'Concurrent modification' },
