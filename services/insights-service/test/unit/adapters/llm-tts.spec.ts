@@ -169,6 +169,8 @@ describe('StubLlmAdapter: concrete admin questions (es/en)', () => {
     const events = { truncated: false, items: [{ title: 'Taller de Git', seatsTaken: 12, capacity: 30 }, { title: 'Taller de Docker', seatsTaken: 40, capacity: 80 }] };
     expect((await answer('es', '¿Qué evento tiene más inscritos?', result('list_events', events))).first).toBe('El evento con más inscritos es Taller de Docker, con 40 inscritos de 80 cupos.');
     expect((await answer('en', 'Which event has the most registrations?', result('list_events', events))).first).toBe('The event with the most registrations is Taller de Docker, with 40 registered out of 80 seats.');
+    const tie = { truncated: false, items: [{ title: 'Taller de Git', seatsTaken: 1, capacity: 30 }, { title: 'Hackathon', seatsTaken: 1, capacity: 120 }, { title: 'Charla', seatsTaken: 0, capacity: 80 }] };
+    expect((await answer('es', '¿Qué evento tiene más inscritos?', result('list_events', tie))).first).toBe('Hay un empate: 2 eventos tienen el máximo de inscritos (1 inscrito), por ejemplo Taller de Git, Hackathon.');
     const kpis = { from: TODAY, to: TODAY, activeUsers: 5, newUsers: 3, posts: 0, comments: 0, reactions: 0, registrationsConfirmed: 0, registrationsFailed: 0, registrationsCancelled: 0, creditsToppedUp: 0, creditsSpent: 0, flaggedContent: 0, openAlerts: 0, series: [] };
     expect((await answer('es', '¿Cuántos usuarios nuevos hoy?', result('get_platform_kpis', kpis))).first).toBe('Hoy se registraron 3 usuarios nuevos.');
     expect((await answer('en', 'How many new users today?', result('get_platform_kpis', kpis))).first).toBe('Today, 3 new users signed up.');

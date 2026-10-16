@@ -208,10 +208,20 @@ export function buildDirectAnswer(locale: Locale, intent: Intent, question: stri
       };
       if (items.length === 0) return { answer: es ? 'No hay eventos registrados para comparar.' : 'There are no events to compare.', bullets: [], dataset, chart: { type: 'table' }, usesNames: false };
       const top = items[0] as Obj;
+      const tied = items.filter((e) => e.seatsTaken === top.seatsTaken);
+      const n = top.seatsTaken as number;
+      const seats = es ? `${n} ${n === 1 ? 'inscrito' : 'inscritos'}` : `${n} registered`;
+      const names = tied.slice(0, 3).map((e) => safeText(e.title)).join(', ');
+      const answer =
+        tied.length > 1
+          ? es
+            ? `Hay un empate: ${tied.length} eventos tienen el máximo de inscritos (${seats}), por ejemplo ${names}.`
+            : `There is a tie: ${tied.length} events have the most registrations (${seats}), for example ${names}.`
+          : es
+            ? `El evento con más inscritos es ${safeText(top.title)}, con ${seats} de ${top.capacity} cupos.`
+            : `The event with the most registrations is ${safeText(top.title)}, with ${seats} out of ${top.capacity} seats.`;
       return {
-        answer: es
-          ? `El evento con más inscritos es ${safeText(top.title)}, con ${top.seatsTaken} inscritos de ${top.capacity} cupos.`
-          : `The event with the most registrations is ${safeText(top.title)}, with ${top.seatsTaken} registered out of ${top.capacity} seats.`,
+        answer,
         bullets: items.slice(0, 5).map((e, n) => `${n + 1}. **${safeText(e.title)}**: ${e.seatsTaken}/${e.capacity}`),
         dataset,
         chart: { type: 'bar', x: 'event', y: 'seatsTaken', title: cols.taken },
