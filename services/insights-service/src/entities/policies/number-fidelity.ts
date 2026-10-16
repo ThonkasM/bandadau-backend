@@ -1,4 +1,5 @@
 import type { ReportDataset } from '../report';
+import { dateContext, dateContextNumbers,datePartNumbers } from './relative-dates';
 
 /** Numbers like `1 284`, `1,284`, `1.284`, `12.5`, `-3`, `38%`. Dates are stripped first. */
 const DATE_RE = /\b\d{4}-\d{2}(?:-\d{2})?\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b\d{1,2}:\d{2}\b/g;
@@ -51,13 +52,63 @@ export interface FidelityResult {
 
 const close = (a: number, b: number): boolean => a === b || Math.abs(a - b) <= Math.abs(b) * 0.01;
 
+/** What the verifier knows besides tool results: the question, today and the arguments of every tool call. */
+export interface FidelityContext {
+  question?: string;
+  today?: string;
+  toolCalls?: { name: string; input: Record<string, unknown> }[];
+}
+
+const ISO_DATE_PREFIX = /^\d{4}-\d{2}-\d{2}/;
+
+function walk(value: unknown, visit: (v: unknown, key?: string) => void, key?: string): void {
+  visit(value, key);
+  if (Array.isArray(value)) for (const v of value) walk(v, visit, key);
+  else if (value && typeof value === 'object') for (const [k, v] of Object.entries(value)) walk(v, visit, k);
+}
+
 /**
- * A2: every figure of the Markdown must exist in the dataset or in a tool result (1 % rounding tolerance).
- * Also accepts sums/averages per dataset column and the row count, which the prompt allows ("sumas simples").
+ * Numbers that are legitimate without being a tool figure: the question's own numbers, the dates and lengths of the periods
+ * (years, day/month numbers, number of days), requested limits, positions ("Top 3", 1.º, "3 eventos": 0..max(limit, array length, 3)).
+ * Averages, differences and percentages are NOT here: they must come from the `calculate` tool or a tool field.
  */
-export function checkNumberFidelity(markdown: string, dataset: ReportDataset | null, toolResults: unknown[]): FidelityResult {
+export function contextNumbers(ctx: FidelityContext, toolResults: unknown[]): number[] {
+  const out: number[] = [];
+  if (ctx.question) out.push(...extractNumbers(ctx.question));
+  if (ctx.today) out.push(...dateContextNumbers(dateContext(ctx.today)), ...datePartNumbers(ctx.today));
+  let rankBound = 3;
+  for (const call of ctx.toolCalls ?? []) {
+    const dates: string[] = [];
+    walk(call.input, (v, key) => {
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        out.push(v);
+        if (key && /limit|top|size|count|max/i.test(key)) rankBound = Math.max(rankBound, Math.min(v, 100));
+      } else if (typeof v === 'string' && ISO_DATE_PREFIX.test(v)) {
+        dates.push(v);
+        out.push(...datePartNumbers(v));
+      }
+    });
+    const stamps = dates.map((d) => Date.parse(d.slice(0, 10) + 'T00:00:00Z')).filter(Number.isFinite);
+    if (stamps.length >= 2) {
+      const span = Math.round((Math.max(...stamps) - Math.min(...stamps)) / 86_400_000);
+      out.push(span, span + 1);
+    }
+  }
+  for (const r of toolResults) {
+    walk(r, (v) => {
+      if (Array.isArray(v)) rankBound = Math.max(rankBound, Math.min(v.length, 100));
+      else if (typeof v === 'string' && ISO_DATE_PREFIX.test(v)) out.push(...datePartNumbers(v));
+    });
+  }
+  for (let i = 0; i <= rankBound; i++) out.push(i);
+  return out;
+}
+
+/** A2: every figure of the Markdown must exist in the dataset, in a tool result or in the allowed context (1 % rounding tolerance). */
+export function checkNumberFidelity(markdown: string, dataset: ReportDataset | null, toolResults: unknown[], ctx: FidelityContext = {}): FidelityResult {
   const evidence: number[] = [];
   for (const r of toolResults) collectNumericLeaves(r, evidence);
+  evidence.push(...contextNumbers(ctx, toolResults));
   if (dataset) {
     dataset.columns.forEach((_, c) => {
       const col = dataset.rows.map((r) => r[c]).filter((v): v is number => typeof v === 'number');
@@ -75,8 +126,10 @@ export function checkNumberFidelity(markdown: string, dataset: ReportDataset | n
     evidence.push(dataset.rows.length, dataset.columns.length);
     for (const row of dataset.rows) for (const cell of row) if (typeof cell === 'string') evidence.push(...extractNumbers(cell));
   }
-  const unsupported = extractNumbers(markdown).filter((n) => !evidence.some((e) => close(n, e) || close(Math.abs(n), Math.abs(e))));
-  return { ok: unsupported.length === 0, unsupported };
+  // list markers ("1. ", "2) ") are positions, not figures
+  const body = markdown.replace(/^\s*\d{1,2}[.)]\s+/gm, '');
+  const unsupported = extractNumbers(body).filter((n) => !evidence.some((e) => close(n, e) || close(Math.abs(n), Math.abs(e))));
+  return { ok: unsupported.length === 0, unsupported: [...new Set(unsupported)] };
 }
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;

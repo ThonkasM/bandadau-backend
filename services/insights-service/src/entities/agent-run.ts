@@ -27,6 +27,14 @@ export interface AgentRunStep {
   usage?: TokenUsage;
 }
 
+/** Result of the figure/format verification of the final text (never shown to the user; ADR-0022 / agentes-y-reportes-generativos §4.4). */
+export interface RunVerification {
+  passed: boolean;
+  /** Silent regenerations performed (0 or 1). */
+  retries: number;
+  unsupportedNumbers: number[];
+}
+
 export interface AgentRun {
   id: string;
   agent: AgentKind;
@@ -39,6 +47,7 @@ export interface AgentRun {
   /** Real engine and mode (AGENT|HYBRID|DETERMINISTIC) that served the run (ADR-0022). */
   engine?: ConcreteEngine | null;
   engineMode?: EngineMode | null;
+  verification?: RunVerification | null;
   promptVersion: string | null;
   toolsUsed: string[];
   stepCount: number;

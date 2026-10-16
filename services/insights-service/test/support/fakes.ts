@@ -178,6 +178,9 @@ export const fakePrompts: PromptCatalog = {
   version: 'test@1',
   system: (agent, locale) => `system:${agent}:${locale}`,
   compose: (locale, q) => `compose:${locale}:${q}`,
+  qaSystem: (locale) => `system:qa:${locale}`,
+  qaCompose: (locale, q) => `qa-compose:${locale}:${q}`,
+  rewrite: (locale, unsupported) => `rewrite:${locale}:${unsupported.join(',')}`,
   audio: (locale) => `audio:${locale}`,
 };
 

@@ -122,7 +122,7 @@ describe('ReportAgent (UC-19) with a fake LLM and a fake MCP client', () => {
     await s.jobs.drain();
     const first = s.llm.requests[0]!;
     expect(first.tools?.map((t) => t.name)).toEqual(['detect_anomalies', 'get_platform_kpis', 'get_registration_stats', 'get_service_health', 'list_failed_sagas', 'list_flagged_content']);
-    expect(first.system).toBe('system:report:es');
+    expect(first.system).toBe('system:qa:es');
     expect(JSON.stringify(first.messages[0])).toContain('Fecha de hoy: 2026-10-15');
     expect(first.system).not.toMatch(/2026-10-15/);
   });
@@ -191,7 +191,7 @@ describe('ReportAgent (UC-19) with a fake LLM and a fake MCP client', () => {
     const s = setup(new ScriptedLlm(happyScript()));
     const r = await s.request.execute({ question: 'How many registrations were there last month?', locale: 'en', requestedBy: 'a', defaultLocale: 'es' });
     await s.jobs.drain();
-    expect(s.llm.requests[0]!.system).toBe('system:report:en');
+    expect(s.llm.requests[0]!.system).toBe('system:qa:en');
     expect((await s.reports.findById(r.reportId))!.audioKey).toBe(`reports/${r.reportId}/summary.en.mp3`);
   });
 

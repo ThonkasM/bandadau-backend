@@ -21,11 +21,60 @@ export interface LoopInput {
   limits: AgentGuardrails;
   mcp: McpClientPort;
   meta?: { question?: string; today?: string };
+  /** Output budget of every LLM call of the loop (default 4096; Q&A mode uses ~500). */
+  maxOutputTokens?: number;
 }
 export interface LoopOutput {
   messages: LlmMessage[];
   /** Parsed structured results of every successful tool call (evidence for the fidelity check). */
   toolResults: unknown[];
+  /** Name and arguments of every successful tool call (dates, limits: context of the fidelity check). */
+  toolCalls: { name: string; input: Record<string, unknown> }[];
+}
+
+/** Tool definitions without prose that the model does not need (descriptions are cut; keeps the schema shape the adapters validate). */
+export function compactTool(t: LlmToolDef): LlmToolDef {
+  const strip = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(strip);
+    if (v && typeof v === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(v)) {
+        if (k === 'description' && typeof x === 'string') out[k] = x.length > 90 ? `${x.slice(0, 87)}...` : x;
+        else if (k === 'examples' || k === 'title' || k === '$schema' || k === 'default') continue;
+        else out[k] = strip(x);
+      }
+      return out;
+    }
+    return v;
+  };
+  return { name: t.name, description: t.description.length > 220 ? `${t.description.slice(0, 217)}...` : t.description, inputSchema: strip(t.inputSchema) as Record<string, unknown> };
+}
+
+const MAX_ARRAY = 40;
+/** What the model needs from a tool result: no nulls, short arrays (the count says how many were omitted), figures rounded to 2 decimals. */
+export function compactResult(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const items = value.slice(0, MAX_ARRAY).map(compactResult);
+    return value.length > MAX_ARRAY ? [...items, `…+${value.length - MAX_ARRAY} more`] : items;
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (v === null || v === undefined || v === '') continue;
+      out[k] = compactResult(v);
+    }
+    return out;
+  }
+  if (typeof value === 'number' && !Number.isInteger(value)) return Math.round(value * 100) / 100;
+  return value;
+}
+
+const stable = (v: unknown): string => (Array.isArray(v) ? `[${v.map(stable).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${k}:${stable((v as Record<string, unknown>)[k])}`).join(',')}}` : JSON.stringify(v));
+
+interface CachedCall {
+  content: string;
+  isError: boolean;
+  structured: unknown;
 }
 
 const wrap = (tool: string, content: string) => `<tool_data source="${tool}">${content}</tool_data>`;
@@ -46,6 +95,9 @@ export class AgentLoop {
     const { run, limits } = input;
     const messages = [...input.messages];
     const toolResults: unknown[] = [];
+    const calledTools: { name: string; input: Record<string, unknown> }[] = [];
+    const cache = new Map<string, CachedCall>();
+    const offered = input.tools.map(compactTool);
     const allowed = new Set(input.tools.map((t) => t.name));
     const startedAtMs = this.clock.now().getTime();
     let toolCalls = 0;
@@ -64,8 +116,8 @@ export class AgentLoop {
         locale: input.locale,
         system: input.system,
         messages,
-        tools: input.tools,
-        maxTokens: 4096,
+        tools: offered,
+        maxTokens: input.maxOutputTokens ?? 4096,
         effort: 'medium',
         meta: input.meta,
         sessionId: run.id,
@@ -92,7 +144,7 @@ export class AgentLoop {
       });
       messages.push({ role: 'assistant', content: res.content });
 
-      if (res.stopReason === 'end_turn') return { messages, toolResults };
+      if (res.stopReason === 'end_turn') return { messages, toolResults, toolCalls: calledTools };
       if (res.stopReason === 'refusal') throw new LlmRefusalError();
       if (res.stopReason !== 'tool_use') {
         run.stopReason = 'MAX_TOKENS';
@@ -100,7 +152,7 @@ export class AgentLoop {
       }
       const calls = res.content.filter((b): b is Extract<LlmBlock, { type: 'tool_use' }> => b.type === 'tool_use');
       toolCalls += calls.length;
-      const results = await Promise.all(calls.map((c) => this.executeTool(input, allowed, c, toolResults, run)));
+      const results = await Promise.all(calls.map((c) => this.executeTool(input, allowed, c, toolResults, calledTools, cache, run)));
       messages.push({ role: 'user', content: results });
     }
   }
@@ -110,23 +162,44 @@ export class AgentLoop {
     allowed: Set<string>,
     call: Extract<LlmBlock, { type: 'tool_use' }>,
     toolResults: unknown[],
+    calledTools: { name: string; input: Record<string, unknown> }[],
+    cache: Map<string, CachedCall>,
     run: AgentRun,
   ): Promise<LlmBlock> {
     const t0 = this.clock.now();
     let content: string;
     let isError = false;
+    let cached = false;
     if (!allowed.has(call.name)) {
       content = `Tool ${call.name} is not allowed for this agent.`;
       isError = true;
     } else {
-      try {
-        const res = await withTimeout(input.mcp.callTool(call.name, call.input), TOOL_TIMEOUT_MS);
-        content = res.content;
-        isError = res.isError;
-        if (!isError) toolResults.push(res.structured ?? safeParse(res.content));
-      } catch (error) {
-        content = `Tool call failed: ${(error as Error).message}`;
-        isError = true;
+      // same tool + same arguments within the same minute of the same run: answered from memory (no second MCP call)
+      const key = `${call.name}|${stable(call.input)}|${Math.floor(t0.getTime() / 60_000)}`;
+      const hit = cache.get(key);
+      if (hit) {
+        ({ content, isError } = hit);
+        if (!isError) {
+          toolResults.push(hit.structured);
+          calledTools.push({ name: call.name, input: call.input });
+        }
+        cached = true;
+      } else {
+        try {
+          const res = await withTimeout(input.mcp.callTool(call.name, call.input), TOOL_TIMEOUT_MS);
+          content = res.content;
+          isError = res.isError;
+          const structured = res.structured ?? safeParse(res.content);
+          if (!isError) {
+            toolResults.push(structured);
+            calledTools.push({ name: call.name, input: call.input });
+            if (structured !== null && typeof structured === 'object') content = JSON.stringify(compactResult(structured));
+          }
+          cache.set(key, { content, isError, structured });
+        } catch (error) {
+          content = `Tool call failed: ${(error as Error).message}`;
+          isError = true;
+        }
       }
     }
     if (!run.toolsUsed.includes(call.name)) run.toolsUsed.push(call.name);
@@ -135,7 +208,7 @@ export class AgentLoop {
       kind: 'TOOL_CALL',
       toolName: call.name,
       input: call.input,
-      outputSummary: maskDisplayNamesInJson(content).slice(0, SUMMARY_MAX),
+      outputSummary: `${cached ? '(cached) ' : ''}${maskDisplayNamesInJson(content).slice(0, SUMMARY_MAX)}`,
       isError,
       startedAt: t0.toISOString(),
       durationMs: this.clock.now().getTime() - t0.getTime(),

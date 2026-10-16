@@ -41,6 +41,12 @@ export interface PromptCatalog {
   version: string;
   system(agent: 'report' | 'alert', locale: Locale): string;
   compose(locale: Locale, question: string): string;
+  /** Q&A mode (a concrete question, not a summary): short system prompt for the agent loop. */
+  qaSystem(locale: Locale): string;
+  /** Q&A mode: JSON composition (direct answer first) for engines that do not write the final text themselves. */
+  qaCompose(locale: Locale, question: string): string;
+  /** Internal instruction of the single silent regeneration (never shown to the user). */
+  rewrite(locale: Locale, unsupported: number[], problems: { chatter: boolean; notAnAnswer: boolean }): string;
   audio(locale: Locale): string;
 }
 export const PROMPT_CATALOG = Symbol('PromptCatalog');
