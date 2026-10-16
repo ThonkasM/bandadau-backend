@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcUserRepository implements UserRepositoryPort {
     private static final String COLUMNS = "id, email, university_id, status, roles, locale, theme, email_verified_at, "
-            + "suspended_reason, created_at, updated_at, version, display_name";
+            + "suspended_reason, suspended_at, created_at, updated_at, version, display_name";
 
     private final JdbcClient jdbc;
 
@@ -27,7 +27,7 @@ public class JdbcUserRepository implements UserRepositoryPort {
         return new User(Sql.uuid(rs, "id"), Email.of(rs.getString("email")), Sql.uuid(rs, "university_id"),
                 UserStatus.valueOf(rs.getString("status")), roles, Language.fromCode(rs.getString("locale")),
                 ThemePreference.valueOf(rs.getString("theme")), Sql.instant(rs, "email_verified_at"),
-                rs.getString("suspended_reason"), Sql.instant(rs, "created_at"), Sql.instant(rs, "updated_at"),
+                rs.getString("suspended_reason"), Sql.instant(rs, "suspended_at"), Sql.instant(rs, "created_at"), Sql.instant(rs, "updated_at"),
                 rs.getLong("version"), rs.getString("display_name"));
     }
 
@@ -52,13 +52,14 @@ public class JdbcUserRepository implements UserRepositoryPort {
         try {
             jdbc.sql("""
                     INSERT INTO users (id, email, university_id, status, roles, locale, theme, email_verified_at,
-                                       suspended_reason, version, created_at, updated_at, display_name)
-                    VALUES (:id, :email, :uni, :status, :roles, :locale, :theme, :verified, :reason, 0, :created, :updated, :name)
+                                       suspended_reason, suspended_at, version, created_at, updated_at, display_name)
+                    VALUES (:id, :email, :uni, :status, :roles, :locale, :theme, :verified, :reason, :suspendedAt, 0, :created, :updated, :name)
                     """)
                     .param("id", u.id()).param("email", u.email().value()).param("uni", u.universityId())
                     .param("status", u.status().name()).param("roles", roleNames(u.roles()))
                     .param("locale", u.language().code()).param("theme", u.theme().name())
                     .param("verified", Sql.ts(u.emailVerifiedAt())).param("reason", u.suspendedReason())
+                    .param("suspendedAt", Sql.ts(u.suspendedAt()))
                     .param("created", Sql.ts(u.createdAt())).param("updated", Sql.ts(u.updatedAt()))
                     .param("name", u.displayName()).update();
         } catch (DuplicateKeyException e) {
@@ -70,13 +71,14 @@ public class JdbcUserRepository implements UserRepositoryPort {
     public void update(User u) {
         int rows = jdbc.sql("""
                 UPDATE users SET status = :status, roles = :roles, locale = :locale, theme = :theme,
-                       email_verified_at = :verified, suspended_reason = :reason, updated_at = :updated,
+                       email_verified_at = :verified, suspended_reason = :reason, suspended_at = :suspendedAt, updated_at = :updated,
                        display_name = :name, version = version + 1
                 WHERE id = :id AND version = :version
                 """)
                 .param("status", u.status().name()).param("roles", roleNames(u.roles()))
                 .param("locale", u.language().code()).param("theme", u.theme().name())
                 .param("verified", Sql.ts(u.emailVerifiedAt())).param("reason", u.suspendedReason())
+                .param("suspendedAt", Sql.ts(u.suspendedAt()))
                 .param("updated", Sql.ts(u.updatedAt())).param("name", u.displayName()).param("id", u.id()).param("version", u.version()).update();
         if (rows == 0) throw Errors.concurrentModification();
     }

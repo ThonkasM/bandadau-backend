@@ -377,7 +377,13 @@ class IdentityIntegrationTest {
                 Map.of("status", "SUSPENDED", "reason", "Contenido inapropiado reiterado"),
                 "Authorization", serviceAuth, "X-Actor-Id", ACTOR.toString());
         assertThat(suspended.status()).isEqualTo(200);
-        assertThat(suspended.body()).containsEntry("status", "SUSPENDED");
+        assertThat(suspended.body()).containsEntry("status", "SUSPENDED")
+                .containsEntry("suspensionReason", "Contenido inapropiado reiterado");
+        assertThat(suspended.body().get("suspendedAt")).isNotNull();
+        Resp listed = call("GET", "/internal/v1/users?ids=" + userId, null, "Authorization", serviceAuth);
+        @SuppressWarnings("unchecked") Map<String, Object> listedUser = ((List<Map<String, Object>>) listed.body().get("items")).get(0);
+        assertThat(listedUser.get("suspendedAt")).isNotNull();
+        assertThat(listedUser).containsEntry("suspensionReason", "Contenido inapropiado reiterado");
         Map<String, Object> event = awaitEvent("bandada.identity.user.suspended.v1", userId);
         @SuppressWarnings("unchecked") Map<String, Object> data = (Map<String, Object>) event.get("data");
         assertThat(data).containsEntry("suspendedBy", ACTOR.toString()).containsEntry("reason", "Contenido inapropiado reiterado");
@@ -391,6 +397,8 @@ class IdentityIntegrationTest {
         Resp reactivated = call("PATCH", "/internal/v1/users/" + userId + "/status", Map.of("status", "ACTIVE"),
                 "Authorization", serviceAuth, "X-Actor-Id", ACTOR.toString());
         assertThat(reactivated.status()).isEqualTo(200);
+        assertThat(reactivated.body().get("suspendedAt")).isNull();
+        assertThat(reactivated.body().get("suspensionReason")).isNull();
         awaitEvent("bandada.identity.user.reactivated.v1", userId);
         assertThat(login(email).status()).isEqualTo(200);
 
@@ -570,5 +578,25 @@ class IdentityIntegrationTest {
         jdbc.sql("UPDATE rate_limit_windows SET expires_at = now() - interval '1 second' WHERE limit_key = :k")
                 .param("k", key).update();
         assertThat(limiter.check(key, 2, Duration.ofSeconds(30))).isZero();
+    }
+
+    @Autowired com.bandadau.identity.adapter.out.messaging.OutboxRelay outboxRelay;
+
+    @Test @Order(15)
+    void outboxPurgeDeletesOnlyOldPublishedRows() {
+        String old = UUID.randomUUID().toString(), fresh = UUID.randomUUID().toString(), pending = UUID.randomUUID().toString();
+        String insert = "INSERT INTO outbox (id, exchange, routing_key, payload, created_at, published_at) "
+                + "VALUES (CAST(:id AS uuid), 'x', 'k', '{}'::jsonb, now(), %s)";
+        jdbc.sql(insert.formatted("now() - interval '30 days'")).param("id", old).update();
+        jdbc.sql(insert.formatted("now() - interval '1 hour'")).param("id", fresh).update();
+        jdbc.sql(insert.formatted("NULL")).param("id", pending).update();
+        assertThat(outboxRelay.purge()).isGreaterThanOrEqualTo(1);
+        assertThat(count(old)).isZero();
+        assertThat(count(fresh)).isEqualTo(1);
+        assertThat(count(pending)).isEqualTo(1);
+    }
+
+    private int count(String id) {
+        return jdbc.sql("SELECT count(*) FROM outbox WHERE id = CAST(:id AS uuid)").param("id", id).query(Integer.class).single();
     }
 }

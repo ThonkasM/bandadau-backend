@@ -61,8 +61,12 @@ class DomainModelTest {
         assertThatThrownBy(() -> user.suspend("x", NOW)).isInstanceOf(DomainException.class);
         user.verifyEmail(NOW);
         assertThat(user.suspend("abuse", NOW)).isTrue();
+        assertThat(user.suspendedAt()).isEqualTo(NOW);
+        assertThat(user.suspendedReason()).isEqualTo("abuse");
         assertThat(user.suspend("abuse", NOW)).isFalse();
         assertThat(user.reactivate(NOW)).isTrue();
+        assertThat(user.suspendedAt()).isNull();
+        assertThat(user.suspendedReason()).isNull();
         assertThat(user.updatePreferences(Language.EN, ThemePreference.DARK, NOW)).isTrue();
         assertThat(user.updatePreferences(Language.EN, ThemePreference.DARK, NOW)).isFalse();
         assertThat(user.canAccess(TargetApp.ADMIN)).isFalse();

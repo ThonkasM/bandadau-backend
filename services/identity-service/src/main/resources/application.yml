@@ -99,8 +99,12 @@ bandada:
     resend-per-hour: ${RESEND_PER_HOUR:5}
     hide-existing-accounts: ${REGISTER_HIDE_EXISTING_ACCOUNTS:true}
   outbox:
-    relay-interval: ${OUTBOX_RELAY_INTERVAL:PT1S}
+    # OUTBOX_POLL_INTERVAL (por defecto 500 ms, como en eventos-y-mensajeria.md); OUTBOX_RELAY_INTERVAL se conserva como alias antiguo.
+    relay-interval: ${OUTBOX_POLL_INTERVAL:${OUTBOX_RELAY_INTERVAL:PT0.5S}}
     batch-size: 100
+    # Filas ya publicadas: se purgan al pasar OUTBOX_RETENTION (por defecto 7 días); el job corre cada OUTBOX_PURGE_INTERVAL (1 h).
+    retention: ${OUTBOX_RETENTION:P7D}
+    purge-interval: ${OUTBOX_PURGE_INTERVAL:PT1H}
   rabbit:
     declare-topology: ${RABBIT_DECLARE_TOPOLOGY:false}
   service-clients: ${SERVICE_CLIENTS:}

@@ -1,6 +1,7 @@
 package com.bandadau.identity.adapter.out.messaging;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -29,16 +30,46 @@ public class OutboxRelay {
     private final RabbitTemplate rabbit;
     private final ObjectMapper mapper;
     private final int batchSize;
+    private final Duration retention;
 
-    public OutboxRelay(JdbcClient jdbc, TransactionTemplate tx, RabbitTemplate rabbit, ObjectMapper mapper, int batchSize) {
+    public OutboxRelay(JdbcClient jdbc, TransactionTemplate tx, RabbitTemplate rabbit, ObjectMapper mapper, int batchSize,
+                       Duration retention) {
         this.jdbc = jdbc;
         this.tx = tx;
         this.rabbit = rabbit;
         this.mapper = mapper;
         this.batchSize = batchSize;
+        this.retention = retention;
     }
 
-    @Scheduled(fixedDelayString = "${bandada.outbox.relay-interval:PT1S}")
+    /** Deletes rows published more than {@code retention} ago (in chunks, to keep locks short). */
+    @Scheduled(fixedDelayString = "${bandada.outbox.purge-interval:PT1H}", initialDelayString = "PT1M")
+    public void purgePublished() {
+        try {
+            purge();
+        } catch (RuntimeException e) {
+            log.warn("event=outbox.purge.failed error={}", e.toString());
+        }
+    }
+
+    /** @return number of rows deleted. */
+    public int purge() {
+        int total = 0;
+        int deleted;
+        do {
+            deleted = jdbc.sql("""
+                    DELETE FROM outbox WHERE id IN (
+                        SELECT id FROM outbox WHERE published_at IS NOT NULL
+                          AND published_at < now() - make_interval(secs => :secs) LIMIT 1000)
+                    """)
+                    .param("secs", retention.toSeconds()).update();
+            total += deleted;
+        } while (deleted >= 1000);
+        if (total > 0) log.info("event=outbox.purge.done deleted={}", total);
+        return total;
+    }
+
+    @Scheduled(fixedDelayString = "${bandada.outbox.relay-interval:PT0.5S}")
     public void relay() {
         try {
             tx.executeWithoutResult(status -> publishBatch());

@@ -70,6 +70,9 @@ Dev **7001**. Público (Traefik): `/api/v1/auth/**`, `/api/v1/users/**`,
 - `/internal/**` exige scope (D-7): GET/HEAD → `internal:read`, resto → `internal:write`. `SERVICE_CLIENTS=id:secret[:scope|scope]` (por defecto ambos).
 - Token MCP (UC-22): `aud=mcp`, `typ=user`, `roles=[ADMIN]`, `scope=mcp:tools`, 8 h, `jti` en `mcp_tokens`; insights consulta `GET /internal/v1/mcp-tokens/{jti}` para respetar la revocación. Identity rechaza `aud=mcp` en sus rutas.
 
+- `User.suspendedAt` / `suspensionReason` (contrato 1.4.0): columnas `users.suspended_at` (V3) y `suspended_reason`; se rellenan al suspender y se limpian al reactivar.
+- Outbox: el relay corre cada `OUTBOX_POLL_INTERVAL` (500 ms; alias antiguo `OUTBOX_RELAY_INTERVAL`) y un job horario purga las filas publicadas con más de `OUTBOX_RETENTION` (7 días).
+
 ## Mensajería
 
 - **Publica** (outbox → `bandada.events`): `bandada.identity.user.registered.v1`,

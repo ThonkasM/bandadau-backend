@@ -22,7 +22,7 @@ public record AppProperties(Jwt jwt, Tokens tokens, Urls urls, Mail mail, Web we
                       int handoffPerMinute, Duration resendMinInterval, int resendPerHour,
                       boolean hideExistingAccounts, String rateLimitStore) { }
 
-    public record Outbox(Duration relayInterval, int batchSize) { }
+    public record Outbox(Duration relayInterval, int batchSize, Duration retention, Duration purgeInterval) { }
 
     public record Rabbit(boolean declareTopology) { }
 }

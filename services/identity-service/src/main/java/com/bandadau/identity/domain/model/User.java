@@ -16,14 +16,15 @@ public final class User {
     private ThemePreference theme;
     private Instant emailVerifiedAt;
     private String suspendedReason;
+    private Instant suspendedAt;
     private final Instant createdAt;
     private Instant updatedAt;
     private long version;
     private String displayName;
 
     public User(UUID id, Email email, UUID universityId, UserStatus status, Set<Role> roles, Language language,
-                ThemePreference theme, Instant emailVerifiedAt, String suspendedReason, Instant createdAt,
-                Instant updatedAt, long version, String displayName) {
+                ThemePreference theme, Instant emailVerifiedAt, String suspendedReason, Instant suspendedAt,
+                Instant createdAt, Instant updatedAt, long version, String displayName) {
         this.id = id;
         this.email = email;
         this.universityId = universityId;
@@ -33,6 +34,7 @@ public final class User {
         this.theme = theme;
         this.emailVerifiedAt = emailVerifiedAt;
         this.suspendedReason = suspendedReason;
+        this.suspendedAt = suspendedAt;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.version = version;
@@ -42,7 +44,7 @@ public final class User {
     /** RN-01.7: the initial role is always STUDENT. */
     public static User register(UUID id, Email email, UUID universityId, Language language, String displayName, Instant now) {
         return new User(id, email, universityId, UserStatus.PENDING_VERIFICATION, EnumSet.of(Role.STUDENT), language,
-                ThemePreference.SYSTEM, null, null, now, now, 0, displayName);
+                ThemePreference.SYSTEM, null, null, null, now, now, 0, displayName);
     }
 
     /** Name given at registration (D-10); {@code null} means "derive it from the email". */
@@ -71,6 +73,7 @@ public final class User {
         if (status != UserStatus.ACTIVE) throw Errors.invalidStatusTransition(status.name(), UserStatus.SUSPENDED.name());
         status = UserStatus.SUSPENDED;
         suspendedReason = reason;
+        suspendedAt = now;
         updatedAt = now;
         return true;
     }
@@ -81,6 +84,7 @@ public final class User {
         if (status != UserStatus.SUSPENDED) throw Errors.invalidStatusTransition(status.name(), UserStatus.ACTIVE.name());
         status = UserStatus.ACTIVE;
         suspendedReason = null;
+        suspendedAt = null;
         updatedAt = now;
         return true;
     }
@@ -112,6 +116,7 @@ public final class User {
     public ThemePreference theme() { return theme; }
     public Instant emailVerifiedAt() { return emailVerifiedAt; }
     public String suspendedReason() { return suspendedReason; }
+    public Instant suspendedAt() { return suspendedAt; }
     public Instant createdAt() { return createdAt; }
     public Instant updatedAt() { return updatedAt; }
     public long version() { return version; }

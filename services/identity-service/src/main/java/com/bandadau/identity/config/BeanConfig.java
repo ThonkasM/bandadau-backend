@@ -69,7 +69,8 @@ public class BeanConfig {
 
     @Bean OutboxRelay outboxRelay(JdbcClient jdbc, TransactionTemplate tx, RabbitTemplate rabbit, ObjectMapper mapper,
                                   AppProperties props) {
-        return new OutboxRelay(jdbc, tx, rabbit, mapper, props.outbox().batchSize());
+        return new OutboxRelay(jdbc, tx, rabbit, mapper, props.outbox().batchSize(),
+                props.outbox().retention());
     }
 
     @Bean VerificationCodeSenderPort verificationCodeSender(JavaMailSender mail, MessageSource messages, AppProperties props) {
