@@ -102,6 +102,7 @@ export class InfrastructureModule {
                 blockThreshold: env.MODERATION_BLOCK_THRESHOLD,
                 reviewThreshold: env.MODERATION_REVIEW_THRESHOLD,
                 maxVideoSeconds: env.VIDEO_MAX_SECONDS,
+                frameIntervalSeconds: env.VIDEO_FRAME_INTERVAL_SECONDS,
                 retryMs: env.MODEL_RETRY_MS,
               },
               logger,

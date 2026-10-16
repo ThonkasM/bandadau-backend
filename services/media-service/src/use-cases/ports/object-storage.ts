@@ -33,7 +33,7 @@ export interface ModerationVerdict {
   labels: string[];
   scores: Record<string, number>;
   /** Video: P(nsfw) per frame and index of the worst frame. */
-  frameScores?: number[];
+  frameScores?: { index: number; timestampSeconds: number; nsfw: number }[];
   frameIndex?: number | null;
   /** Video: best frame as JPEG, to be stored as the thumbnail. */
   thumbnailJpeg?: Buffer;

@@ -12,7 +12,7 @@ export interface MediaAssetModel {
   thumbnailUrl: string | null;
   tags: string[];
   ocrText: string | null;
-  moderation: { decision: string; labels: string[]; scores: Record<string, number>; maxScore: number; modelVersion: string } | null;
+  moderation: { decision: string; labels: string[]; scores: Record<string, number>; maxScore: number; modelVersion: string; frameScores: { index: number; timestampSeconds: number; nsfw: number }[] | null; worstFrameIndex: number | null } | null;
   createdAt: string;
 }
 
@@ -36,6 +36,8 @@ export function mediaModel(m: ModeratedMedia): MediaAssetModel {
           scores: top.scores ?? {},
           maxScore: Math.max(0, ...Object.values(top.scores ?? {})),
           modelVersion: top.modelVersion,
+          frameScores: top.frameScores ?? null,
+          worstFrameIndex: top.worstFrameIndex ?? null,
         }
       : null,
     createdAt: m.createdAt,

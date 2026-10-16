@@ -10,15 +10,23 @@ export const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image
 export const VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime'] as const;
 export const MAX_VIDEO_SECONDS = 60;
 
+/** NSFW score of one analysed video frame (`timestampSeconds` = index * frame interval). */
+export interface FrameScore {
+  index: number;
+  timestampSeconds: number;
+  nsfw: number;
+}
+
 export interface ModerationResult {
   model: string;
   modelVersion: string;
   labels: string[];
   scores: Record<string, number>;
   decision: ModerationDecision;
+  /** Video only: index of the worst frame (= `worstFrameIndex` of the API). */
   frameIndex: number | null;
-  /** Video only: P(nsfw) per analysed frame (score of the video = max). */
-  frameScores?: number[];
+  /** Video only: P(nsfw) per analysed frame (score of the video = max). Legacy documents stored plain numbers. */
+  frameScores?: (FrameScore | number)[];
   createdAt: Date;
 }
 

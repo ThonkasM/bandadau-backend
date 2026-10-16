@@ -121,11 +121,16 @@ describe('MODERATION_MODE=onnx end to end (real model, MinIO, Mongo)', () => {
     rmSync(dir, { recursive: true, force: true });
     const { id, asset } = await upload(h, bytes, 'VIDEO', 'video/mp4', { durationSeconds: 7 });
     expect(asset.status).toBe('APPROVED');
-    const d = (await doc(h, id)) as unknown as { thumbnailKey: string; moderationResults: { frameScores: number[]; scores: { nsfw: number }; frameIndex: number }[] };
+    const d = (await doc(h, id)) as unknown as { thumbnailKey: string; moderationResults: { frameScores: { index: number; timestampSeconds: number; nsfw: number }[]; scores: { nsfw: number }; frameIndex: number }[] };
     const r = d.moderationResults[0]!;
     expect(r.frameScores).toHaveLength(4); // t = 0, 2, 4, 6 s
-    expect(r.scores.nsfw).toBeCloseTo(Math.max(...r.frameScores), 5);
-    expect(r.frameScores[r.frameIndex]).toBe(Math.max(...r.frameScores));
+    const nsfw = r.frameScores.map((f) => f.nsfw);
+    expect(r.frameScores.map((f) => [f.index, f.timestampSeconds])).toEqual([[0, 0], [1, 2], [2, 4], [3, 6]]);
+    expect(r.scores.nsfw).toBeCloseTo(Math.max(...nsfw), 5);
+    expect(r.frameScores[r.frameIndex]!.nsfw).toBe(Math.max(...nsfw));
+    // API: frameScores + worstFrameIndex are exposed by the internal endpoint (moderation detail for the human moderator)
+    const api = await h.http('GET', `/internal/v1/media/${id}`, { token: await h.serviceToken() });
+    expect(api.body.moderationResults[0]).toMatchObject({ frameScores: r.frameScores, worstFrameIndex: r.frameIndex, frameIndex: r.frameIndex });
     expect(d.thumbnailKey).toMatch(/thumbnail\.jpg$/);
   });
 

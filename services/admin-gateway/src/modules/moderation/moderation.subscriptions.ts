@@ -43,7 +43,7 @@ export function changeFromEvent(event: BusEvent): { type: 'ADDED' | 'RESOLVED'; 
           tags: Array.isArray(d.tags) ? (d.tags as string[]) : [],
           ocrText: null,
           moderation: flagged
-            ? { decision: str(d.decision, 'REVIEW'), labels: (d.labels as string[]) ?? [], scores, maxScore: Number(d.maxScore ?? Math.max(0, ...Object.values(scores))), modelVersion: str(d.modelVersion) }
+            ? { decision: str(d.decision, 'REVIEW'), labels: (d.labels as string[]) ?? [], scores, maxScore: Number(d.maxScore ?? Math.max(0, ...Object.values(scores))), modelVersion: str(d.modelVersion), frameScores: null, worstFrameIndex: null }
             : null,
           createdAt: at,
         },

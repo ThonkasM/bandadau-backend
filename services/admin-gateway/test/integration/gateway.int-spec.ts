@@ -76,7 +76,7 @@ describe('users and DataLoader', () => {
         items: [ids.u1, ids.u2, ids.u3, ids.u1].map((owner, i) => ({
           id: `0192a3b4-0000-7000-8000-0000000001${i}0`, ownerId: owner, kind: 'IMAGE', purpose: 'POST', status: 'FLAGGED', url: `http://m/${i}`, thumbnailUrl: null, tags: [], ocrText: null,
           createdAt: `2026-10-14T10:0${i}:00Z`, updatedAt: `2026-10-14T10:0${i}:00Z`,
-          moderationResults: [{ model: 'nsfw', modelVersion: '1.2.0', labels: ['suggestive'], scores: { nsfw: 0.71 }, decision: 'REVIEW', createdAt: '2026-10-14T10:00:00Z' }],
+          moderationResults: [{ model: 'nsfw', modelVersion: '1.2.0', labels: ['suggestive'], scores: { nsfw: 0.71 }, decision: 'REVIEW', frameScores: [{ index: 0, timestampSeconds: 0, nsfw: 0.2 }, { index: 1, timestampSeconds: 2, nsfw: 0.71 }], worstFrameIndex: 1, createdAt: '2026-10-14T10:00:00Z' }],
         })),
         nextCursor: null,
       },
@@ -84,11 +84,11 @@ describe('users and DataLoader', () => {
     h.mock('GET', '/social/internal/v1/posts', () => ({ body: { items: [], nextCursor: null } }));
     h.mock('GET', '/identity/internal/v1/users', (c) => ({ body: { items: (c.query.get('ids') ?? '').split(',').map((id) => user(id)), nextCursor: null } }));
 
-    const res = await h.gql('{ moderationQueue(first: 10) { totalCount edges { node { id source openReports media { status previewUrl moderation { decision maxScore labels } owner { id email } } } } pageInfo { hasNextPage } } }', { token: moderator });
+    const res = await h.gql('{ moderationQueue(first: 10) { totalCount edges { node { id source openReports media { status previewUrl moderation { decision maxScore labels frameScores { index timestampSeconds nsfw } worstFrameIndex } owner { id email } } } } pageInfo { hasNextPage } } }', { token: moderator });
     expect(res.body.errors).toBeUndefined();
     const q = res.body.data.moderationQueue;
     expect(q.totalCount).toBe(4);
-    expect(q.edges[0].node).toMatchObject({ source: 'AI', media: { status: 'FLAGGED', moderation: { decision: 'REVIEW', maxScore: 0.71, labels: ['suggestive'] }, owner: { id: ids.u1 } } });
+    expect(q.edges[0].node).toMatchObject({ source: 'AI', media: { status: 'FLAGGED', moderation: { decision: 'REVIEW', maxScore: 0.71, labels: ['suggestive'], worstFrameIndex: 1, frameScores: [{ index: 0, timestampSeconds: 0, nsfw: 0.2 }, { index: 1, timestampSeconds: 2, nsfw: 0.71 }] }, owner: { id: ids.u1 } } });
     const userCalls = h.callsTo('/identity/internal/v1/users');
     expect(userCalls).toHaveLength(1);
     expect(userCalls[0]!.query.get('ids')!.split(',').sort()).toEqual([ids.u1, ids.u2, ids.u3].sort());

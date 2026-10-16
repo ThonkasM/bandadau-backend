@@ -48,7 +48,7 @@ Variables de prueba: `TEST_MONGO_URI`, `TEST_DYNAMODB_ENDPOINT`, `TEST_S3_ENDPOI
 Fase 2 (`MODERATION_MODE=onnx`): `MODEL_BUCKET` (def. `S3_BUCKET_MODELS`), `MODEL_NAME`, `MODEL_VERSION` (def. `MODEL_NSFW_VERSION`), `MODEL_VARIANT` (`fp32`|`int8`), `MODEL_CACHE_DIR`, `MODEL_RETRY_MS`, `ORT_THREADS`,
 `MODERATION_BLOCK_THRESHOLD`/`MODERATION_REVIEW_THRESHOLD` (opcionales; si no, los de `metadata.json`), `VIDEO_FRAME_INTERVAL_SECONDS`, `VIDEO_MAX_FRAMES`, `VIDEO_MAX_SECONDS`, `FFMPEG_PATH`, `FFPROBE_PATH`.
 Pruebas: el entorno Jest de integración (`test/support/jest-env-ort.js`) comparte `Float32Array` con onnxruntime-node; fixtures de paridad (`test/fixtures/nsfw-classifier`, generados por `bandadau-ml: make evaluate`). Memoria: ≥ 1 GB (ViT fp32 ≈ 343 MB).
-Gotchas: sharp y PIL no dan tensores idénticos (media |Δ| ≈ 0.003–0.023 en [-1,1]; Δprob < 0.03); el resultado persiste `frameScores`/`frameIndex` (no expuestos por la API: el contrato OpenAPI no los define).
+Gotchas: sharp y PIL no dan tensores idénticos (media |Δ| ≈ 0.003–0.023 en [-1,1]; Δprob < 0.03); `frameScores` (`[{index, timestampSeconds, nsfw}]`) y `worstFrameIndex` se persisten con la decisión y se exponen en `ModerationResult` (API interna y GraphQL del panel); imágenes: `frameScores: null`; documentos antiguos con números planos se normalizan al presentar.
 
 ## Puertos y rutas
 

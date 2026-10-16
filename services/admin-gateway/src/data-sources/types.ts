@@ -58,6 +58,9 @@ export interface MediaModerationResult {
   labels: string[];
   scores: Record<string, number>;
   decision: 'ALLOW' | 'REVIEW' | 'BLOCK';
+  /** Video only: P(nsfw) per analysed frame; `null`/absent for images. */
+  frameScores?: { index: number; timestampSeconds: number; nsfw: number }[] | null;
+  worstFrameIndex?: number | null;
   createdAt: string;
 }
 

@@ -1,5 +1,6 @@
 import type { components } from '@bandada/contracts-ts/openapi/media';
 
+import type { ModerationResult } from '../../entities/media-asset.entity';
 import type { MediaOutput, UploadTicketOutput } from '../../use-cases/outputs';
 import type { Page } from '../../use-cases/ports';
 import type { MediaUrlOutput } from '../../use-cases/queries/media-queries.use-cases';
@@ -30,11 +31,28 @@ export function presentMedia(o: MediaOutput): S['MediaAsset'] {
   };
 }
 
+/** Legacy documents stored `frameScores` as plain numbers: timestamps are unknown there, so `timestampSeconds` is `index * 2` (the former default interval). */
+export function presentModerationResult(r: ModerationResult): S['ModerationResult'] {
+  const frames = r.frameScores?.map((f, i) => (typeof f === 'number' ? { index: i, timestampSeconds: i * 2, nsfw: f } : { index: f.index, timestampSeconds: f.timestampSeconds, nsfw: f.nsfw }));
+  const worst = frames && frames.length > 0 ? (r.frameIndex ?? frames.reduce((w, f) => (f.nsfw > w.nsfw ? f : w)).index) : null;
+  return {
+    model: r.model,
+    modelVersion: r.modelVersion,
+    labels: [...r.labels],
+    scores: { ...r.scores },
+    decision: r.decision,
+    frameIndex: worst,
+    frameScores: frames && frames.length > 0 ? frames : null,
+    worstFrameIndex: worst,
+    createdAt: iso(r.createdAt),
+  };
+}
+
 export function presentModerated(o: MediaOutput): S['ModeratedMedia'] {
   const a = o.asset;
   return {
     ...presentMedia(o),
-    moderationResults: a.moderationResults.map((r) => ({ model: r.model, modelVersion: r.modelVersion, labels: [...r.labels], scores: { ...r.scores }, decision: r.decision, frameIndex: r.frameIndex, createdAt: iso(r.createdAt) })),
+    moderationResults: a.moderationResults.map(presentModerationResult),
     finalDecision: a.finalDecision ? { decision: a.finalDecision.decision, note: a.finalDecision.note, decidedBy: a.finalDecision.decidedBy, decidedAt: iso(a.finalDecision.decidedAt) } : null,
   };
 }

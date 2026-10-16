@@ -16,6 +16,8 @@ export interface OnnxModerationOptions {
   blockThreshold?: number | undefined;
   reviewThreshold?: number | undefined;
   maxVideoSeconds: number;
+  /** Seconds between analysed frames (same value as the frame extractor), to timestamp `frameScores`. */
+  frameIntervalSeconds: number;
   retryMs: number;
 }
 
@@ -112,7 +114,7 @@ export class OnnxModerationAdapter implements ModerationPort {
       const max = Math.max(...frameScores);
       const worst = frameScores.indexOf(max);
       const thumb = await this.bestThumbnail(frames, frameScores);
-      return this.verdict(max, { frameScores: frameScores.map((s) => Number(s.toFixed(6))), frameIndex: worst, thumbnailJpeg: thumb });
+      return this.verdict(max, { frameScores: frameScores.map((s, index) => ({ index, timestampSeconds: index * this.o.frameIntervalSeconds, nsfw: Number(s.toFixed(6)) })), frameIndex: worst, thumbnailJpeg: thumb });
     });
   }
 

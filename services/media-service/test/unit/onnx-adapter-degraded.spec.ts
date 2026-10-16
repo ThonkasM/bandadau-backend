@@ -6,7 +6,7 @@ describe('OnnxModerationAdapter when the model cannot be loaded', () => {
   const logger = new JsonLogger('t', 'debug', (l) => lines.push(l));
   const registry = { load: () => Promise.reject(new Error('S3 down')) };
   const storage = { get: () => Promise.reject(new Error('must not be called')) };
-  const adapter = new OnnxModerationAdapter(registry as never, storage as never, {} as never, { modelName: 'nsfw-classifier', modelVersion: '1.0.0', variant: 'fp32', threads: 1, maxVideoSeconds: 60, retryMs: 3_600_000 }, logger);
+  const adapter = new OnnxModerationAdapter(registry as never, storage as never, {} as never, { modelName: 'nsfw-classifier', modelVersion: '1.0.0', variant: 'fp32', threads: 1, maxVideoSeconds: 60, frameIntervalSeconds: 2, retryMs: 3_600_000 }, logger);
 
   afterAll(() => adapter.stop());
 
