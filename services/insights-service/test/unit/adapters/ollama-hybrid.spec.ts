@@ -1,10 +1,12 @@
 import { LlmUnavailableError } from '../../../src/entities/errors/domain-errors';
 import { loadConfig } from '../../../src/frameworks-drivers/config/app-config';
+import { AnthropicAdapter } from '../../../src/interface-adapters/gateways/llm/anthropic.adapter';
 import { FallbackLlmAdapter } from '../../../src/interface-adapters/gateways/llm/fallback.adapter';
 import { OllamaAdapter } from '../../../src/interface-adapters/gateways/llm/ollama.adapter';
 import { isGroundedAnswer, OllamaHybridAdapter, validatePlan } from '../../../src/interface-adapters/gateways/llm/ollama-hybrid.adapter';
 import { StubLlmAdapter } from '../../../src/interface-adapters/gateways/llm/stub.adapter';
 import type { LlmRequest } from '../../../src/use-cases/ports/llm.port';
+import { REPORT_AGENT_TOOLS } from '../../../src/use-cases/reports/generate-report';
 import { parseComposed } from '../../../src/use-cases/reports/report-schemas';
 
 const TOOLS = ['get_platform_kpis', 'get_registration_stats', 'get_credit_stats', 'get_content_stats', 'list_events', 'list_recent_registrations', 'get_top_credit_spenders', 'list_flagged_content'].map((name) => ({ name, description: `${name} tool`, inputSchema: { type: 'object' } }));
@@ -127,9 +129,7 @@ describe('OllamaHybridAdapter (small local model: code decides facts)', () => {
 
 describe('tool definitions reach the providers', () => {
   it('the report agent offers the buyer tools and the Anthropic adapter sends them as tools', async () => {
-    const { REPORT_AGENT_TOOLS } = await import('../../../src/use-cases/reports/generate-report');
     expect(REPORT_AGENT_TOOLS).toEqual(expect.arrayContaining(['list_recent_registrations', 'get_top_credit_spenders']));
-    const { AnthropicAdapter } = await import('../../../src/interface-adapters/gateways/llm/anthropic.adapter');
     const seen: Record<string, any>[] = [];
     const client = { messages: { create: async (p: Record<string, any>) => (seen.push(p), { model: 'claude-haiku-5-5', stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 1, output_tokens: 1 } }) } };
     await new AnthropicAdapter({ apiKey: 'k', model: 'claude-haiku-5-5', modelCheap: 'claude-haiku-5-5', client: client as never }).complete(collect('quién compró el último ticket'));
