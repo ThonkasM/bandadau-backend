@@ -204,6 +204,62 @@ describe('profile names batch (internal)', () => {
   });
 });
 
+describe('career and content rankings (internal)', () => {
+  const day = (d: string) => new Date(`${d}T12:00:00.000Z`);
+  const post = (over: Record<string, unknown>) => ({
+    _id: uuidv7(), clientId: uuidv7(), authorId: users.ana, text: 'texto', hashtags: [], visibility: 'PUBLIC', status: 'PUBLISHED',
+    reactionCounts: { like: 0, helpful: 0, funny: 0, support: 0 }, commentsCount: 0, createdAt: day('2019-03-10'), updatedAt: day('2019-03-10'), ...over,
+  });
+
+  it('/internal: getCareerStats groups by career, ignores blanks, validates limit, enforces scopes', async () => {
+    const svc = await h.serviceToken('internal:read');
+    const profiles = h.mongo.db(h.db).collection('profiles');
+    const total = await profiles.countDocuments();
+    await profiles.updateOne({ _id: users.eva as never }, { $set: { career: '' } });
+    await profiles.updateOne({ _id: users.dan as never }, { $set: { career: 'Medicina' } });
+    const r = await h.http('GET', '/internal/v1/stats/careers?limit=10', { token: svc });
+    expect(r.status).toBe(200);
+    expect(r.body.totalProfiles).toBe(total);
+    expect(r.body.items[0].career).toBe('Ingeniería');
+    expect(r.body.items.find((i: { career: string }) => i.career === 'Medicina')).toEqual({ career: 'Medicina', users: 1 });
+    expect(r.body.items.some((i: { career: string }) => i.career === '')).toBe(false);
+    expect((await h.http('GET', '/internal/v1/stats/careers?limit=1', { token: svc })).body.items).toHaveLength(1);
+    expect((await h.http('GET', '/internal/v1/stats/careers?limit=51', { token: svc })).status).toBe(400);
+    expect((await h.http('GET', '/internal/v1/stats/careers', { token: await h.serviceToken('') })).status).toBe(403);
+    expect((await h.http('GET', '/internal/v1/stats/careers', { token: tokens.ana })).status).toBe(401);
+  });
+
+  it('/internal: getContentRankings ranks hashtags, authors and public posts over PUBLISHED posts in range', async () => {
+    const svc = await h.serviceToken('internal:read');
+    const posts = h.mongo.db(h.db).collection('posts');
+    const [p1, p2, p3, p4] = [uuidv7(), uuidv7(), uuidv7(), uuidv7()];
+    await posts.insertMany([
+      post({ _id: p1, authorId: users.ana, hashtags: ['alfa', 'beta'], text: `linea uno\n\nlinea dos ${'z'.repeat(100)}`, reactionCounts: { like: 2, helpful: 1, funny: 0, support: 1 }, commentsCount: 1 }) as never,
+      post({ _id: p2, authorId: users.ana, hashtags: ['beta'], reactionCounts: { like: 4, helpful: 0, funny: 0, support: 0 }, commentsCount: 5 }) as never,
+      post({ _id: p3, authorId: users.bob, hashtags: ['alfa'], visibility: 'FOLLOWERS', reactionCounts: { like: 99, helpful: 0, funny: 0, support: 0 } }) as never,
+      post({ _id: p4, authorId: users.bob, hashtags: ['alfa'], status: 'HIDDEN', reactionCounts: { like: 99, helpful: 0, funny: 0, support: 0 } }) as never,
+      post({ authorId: users.bob, hashtags: ['alfa'], createdAt: day('2019-03-11') }) as never, // outside range
+    ]);
+    const q = (by: string, extra = '') => h.http('GET', `/internal/v1/stats/rankings?from=2019-03-10&to=2019-03-10&by=${by}${extra}`, { token: svc });
+    const hashtags = await q('HASHTAGS');
+    expect(hashtags.body).toEqual({ from: '2019-03-10', to: '2019-03-10', by: 'HASHTAGS', hashtags: [{ hashtag: 'alfa', posts: 2 }, { hashtag: 'beta', posts: 2 }] });
+    expect((await q('AUTHORS')).body.authors).toEqual([{ userId: users.ana, posts: 2 }, { userId: users.bob, posts: 1 }]);
+    const ranked = (await q('POSTS')).body;
+    expect(ranked.authors).toBeUndefined();
+    expect(ranked.posts).toHaveLength(2);
+    expect(ranked.posts[0]).toMatchObject({ postId: p2, reactions: 4, comments: 5 }); // same reactions, more comments first
+    expect(ranked.posts[1]).toMatchObject({ postId: p1, authorId: users.ana, reactions: 4, comments: 1 });
+    expect(ranked.posts[1].excerpt).toHaveLength(80);
+    expect(ranked.posts[1].excerpt.startsWith('linea uno linea dos zzz')).toBe(true);
+    expect((await q('POSTS', '&limit=1')).body.posts).toHaveLength(1);
+    expect((await q('POSTS', '&limit=21')).status).toBe(400);
+    expect((await h.http('GET', '/internal/v1/stats/rankings?from=2019-03-10&to=2019-03-01&by=POSTS', { token: svc })).status).toBe(400);
+    expect((await h.http('GET', '/internal/v1/stats/rankings?from=2018-01-01&to=2019-03-01&by=POSTS', { token: svc })).status).toBe(400);
+    expect((await h.http('GET', '/internal/v1/stats/rankings?from=2019-03-10&to=2019-03-10&by=X', { token: svc })).status).toBe(400);
+    expect((await h.http('GET', '/internal/v1/stats/rankings?from=2019-03-10&to=2019-03-10&by=POSTS', { token: await h.serviceToken('') })).status).toBe(403);
+  });
+});
+
 describe('comments, reactions, follows', () => {
   it('createComment is idempotent and counts', async () => {
     const post = await h.http('POST', '/api/v1/posts', { token: tokens.ana, body: { clientId: uuidv7(), text: 'comenten', mediaIds: [], visibility: 'PUBLIC' }, headers: key() });

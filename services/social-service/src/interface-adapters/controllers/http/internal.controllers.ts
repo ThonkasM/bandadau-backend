@@ -4,6 +4,8 @@ import type { z } from 'zod';
 
 import { ListGroupsInternalUseCase } from '../../../use-cases/groups/group.use-cases';
 import { GetProfileNamesUseCase, GetProfileUseCase } from '../../../use-cases/profiles/profile.use-cases';
+import { GetCareerStatsUseCase } from '../../../use-cases/reports/career-stats.use-case';
+import { GetContentRankingsUseCase } from '../../../use-cases/reports/content-rankings.use-case';
 import { GetContentDailyStatsUseCase } from '../../../use-cases/reports/daily-stats.use-case';
 import {
   GetCommentInternalUseCase,
@@ -17,9 +19,11 @@ import { decodeCursor, decodeOffset, encodeOffset } from '../../presenters/curso
 import { page, presentComment, presentGroup, presentModerationPost, presentPost, presentProfile, presentReport, presentStats } from '../../presenters/resource.presenter';
 import {
   actorHeader,
+  careerStatsQuery,
   internalGroupsQuery,
   postsByStatusQuery,
   profileNamesQuery,
+  rankingsQuery,
   reportsQuery,
   resolveReportBody,
   statsQuery,
@@ -48,6 +52,8 @@ export class InternalController {
     @Inject(GetProfileNamesUseCase) private readonly profileNames: GetProfileNamesUseCase,
     @Inject(ListGroupsInternalUseCase) private readonly groups: ListGroupsInternalUseCase,
     @Inject(GetContentDailyStatsUseCase) private readonly stats: GetContentDailyStatsUseCase,
+    @Inject(GetCareerStatsUseCase) private readonly careerStats: GetCareerStatsUseCase,
+    @Inject(GetContentRankingsUseCase) private readonly rankings: GetContentRankingsUseCase,
   ) {}
 
   @Get('posts')
@@ -112,5 +118,15 @@ export class InternalController {
   @Get('stats/daily')
   async getContentDailyStats(@Query(new ZodValidationPipe(statsQuery)) q: In<typeof statsQuery>) {
     return presentStats(await this.stats.execute({ from: q.from, to: q.to, topHashtags: q.topHashtags }));
+  }
+
+  @Get('stats/careers')
+  async getCareerStats(@Query(new ZodValidationPipe(careerStatsQuery)) q: In<typeof careerStatsQuery>) {
+    return this.careerStats.execute({ limit: q.limit });
+  }
+
+  @Get('stats/rankings')
+  async getContentRankings(@Query(new ZodValidationPipe(rankingsQuery)) q: In<typeof rankingsQuery>) {
+    return this.rankings.execute({ from: q.from, to: q.to, by: q.by, limit: q.limit });
   }
 }

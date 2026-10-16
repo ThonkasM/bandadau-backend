@@ -9,6 +9,7 @@ import type { ReactionType } from '../../../entities/post.entity';
 import { Profile } from '../../../entities/profile.entity';
 import type { MediaAssetView } from '../../../entities/value-objects/media';
 import type {
+  CareerStats,
   CommentRepository,
   ContentStatsRepository,
   DailyContentStats,
@@ -19,6 +20,7 @@ import type {
   MembershipRepository,
   MembershipTransition,
   ProfileRepository,
+  RankedPost,
   ReactionRepository,
   ReportRepository,
 } from '../../../use-cases/ports';
@@ -472,5 +474,74 @@ export class MongoContentStatsRepository implements ContentStatsRepository {
       ])
       .toArray();
     return rows.map((r) => ({ hashtag: r._id as string, count: r.n as number }));
+  }
+
+  async careers(limit: number): Promise<CareerStats> {
+    const profiles = this.ctx.col('profiles');
+    const [totalProfiles, rows] = await Promise.all([
+      profiles.countDocuments({}, this.ctx.opts),
+      profiles
+        .aggregate([
+          { $match: { career: { $type: 'string', $nin: ['', null] } } },
+          { $group: { _id: '$career', n: { $sum: 1 } } },
+          { $sort: { n: -1, _id: 1 } },
+          { $limit: limit },
+        ])
+        .toArray(),
+    ]);
+    return { totalProfiles, items: rows.map((r) => ({ career: r._id as string, users: r.n as number })) };
+  }
+
+  async rankHashtags(from: Date, toExclusive: Date, limit: number): Promise<Array<{ hashtag: string; posts: number }>> {
+    const rows = await this.ctx
+      .col('posts')
+      .aggregate([
+        { $match: { createdAt: { $gte: from, $lt: toExclusive }, status: 'PUBLISHED' } },
+        { $unwind: '$hashtags' },
+        { $group: { _id: '$hashtags', n: { $sum: 1 } } },
+        { $sort: { n: -1, _id: 1 } },
+        { $limit: limit },
+      ])
+      .toArray();
+    return rows.map((r) => ({ hashtag: r._id as string, posts: r.n as number }));
+  }
+
+  async rankAuthors(from: Date, toExclusive: Date, limit: number): Promise<Array<{ userId: string; posts: number }>> {
+    const rows = await this.ctx
+      .col('posts')
+      .aggregate([
+        { $match: { createdAt: { $gte: from, $lt: toExclusive }, status: 'PUBLISHED' } },
+        { $group: { _id: '$authorId', n: { $sum: 1 } } },
+        { $sort: { n: -1, _id: 1 } },
+        { $limit: limit },
+      ])
+      .toArray();
+    return rows.map((r) => ({ userId: r._id as string, posts: r.n as number }));
+  }
+
+  async rankPosts(from: Date, toExclusive: Date, limit: number): Promise<RankedPost[]> {
+    const rows = await this.ctx
+      .col('posts')
+      .aggregate([
+        { $match: { createdAt: { $gte: from, $lt: toExclusive }, status: 'PUBLISHED', visibility: 'PUBLIC' } },
+        {
+          $addFields: {
+            reactions: {
+              $add: [
+                { $ifNull: ['$reactionCounts.like', 0] },
+                { $ifNull: ['$reactionCounts.helpful', 0] },
+                { $ifNull: ['$reactionCounts.funny', 0] },
+                { $ifNull: ['$reactionCounts.support', 0] },
+              ],
+            },
+            comments: { $ifNull: ['$commentsCount', 0] },
+          },
+        },
+        { $sort: { reactions: -1, comments: -1, _id: 1 } },
+        { $limit: limit },
+        { $project: { authorId: 1, text: 1, reactions: 1, comments: 1 } },
+      ])
+      .toArray();
+    return rows.map((r) => ({ postId: r._id as unknown as string, authorId: r.authorId as string, text: (r.text as string) ?? '', reactions: r.reactions as number, comments: r.comments as number }));
   }
 }

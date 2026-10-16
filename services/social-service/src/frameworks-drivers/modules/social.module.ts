@@ -63,6 +63,8 @@ import { PostAccess } from '../../use-cases/posts/post-access';
 import { PostAssembler } from '../../use-cases/posts/post-assembler';
 import { GetProfileNamesUseCase, GetProfileUseCase, ProfileReader, UpdateMyProfileUseCase } from '../../use-cases/profiles/profile.use-cases';
 import { RemoveReactionUseCase, SetReactionUseCase } from '../../use-cases/reactions/set-reaction.use-case';
+import { GetCareerStatsUseCase } from '../../use-cases/reports/career-stats.use-case';
+import { GetContentRankingsUseCase } from '../../use-cases/reports/content-rankings.use-case';
 import { GetContentDailyStatsUseCase } from '../../use-cases/reports/daily-stats.use-case';
 import { GetCommentInternalUseCase, GetPostInternalUseCase, ListContentReportsUseCase, ListPostsByStatusUseCase, ResolveContentReportUseCase, UpdatePostStatusUseCase } from '../../use-cases/reports/moderation.use-cases';
 import { ReportContentUseCase } from '../../use-cases/reports/report-content.use-case';
@@ -157,6 +159,8 @@ const repo = <T>(token: symbol, cls: new (ctx: MongoContext) => T) => ({ provide
     factory(ListContentReportsUseCase, REPORT_REPOSITORY),
     factory(ResolveContentReportUseCase, REPORT_REPOSITORY, POST_REPOSITORY, COMMENT_REPOSITORY, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
     factory(GetContentDailyStatsUseCase, STATS_REPOSITORY),
+    factory(GetCareerStatsUseCase, STATS_REPOSITORY),
+    factory(GetContentRankingsUseCase, STATS_REPOSITORY),
     factory(ApplyMediaDecisionUseCase, MEDIA_VIEW_REPOSITORY, POST_REPOSITORY, PROFILE_REPOSITORY, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
     factory(ReconcilePendingMediaUseCase, POST_REPOSITORY, MEDIA_VIEW_REPOSITORY, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
     factory(OnUserRegisteredUseCase, PROFILE_REPOSITORY, CLOCK),

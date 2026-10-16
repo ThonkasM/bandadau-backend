@@ -56,7 +56,7 @@ Jest corre con `NODE_OPTIONS=--experimental-vm-modules` (jose es ESM). Pruebas d
 ## Puertos y rutas
 
 Dev **7002**. Rutas públicas con prefijo `/api/v1` (Traefik no lo recorta): `profiles`, `posts`, `feed`, `groups`, `follows`, `reports`.
-Interno `/internal/v1/{posts (incl. `GET /posts/{postId}` y `GET /comments/{commentId}` en cualquier estado),reports,profiles (incl. `GET /profiles?ids=a,b`: lote de `userId`+`displayName`, ≤ 50),groups,stats/daily}` con `@Internal()` (token de servicio `typ=service`, `aud=bandada-internal`; `InternalScopesGuard` exige `internal:read` en GET e `internal:write` en el resto, `403 FORBIDDEN` si falta; se desactiva con `INTERNAL_SCOPES_ENFORCED=false`).
+Interno `/internal/v1/{posts (incl. `GET /posts/{postId}` y `GET /comments/{commentId}` en cualquier estado),reports,profiles (incl. `GET /profiles?ids=a,b`: lote de `userId`+`displayName`, ≤ 50),groups,stats/daily,stats/careers (perfiles por carrera),stats/rankings (hashtags/autores/posts públicos; rango máx 366 días, `400 VALIDATION_FAILED` si es inválido)}` con `@Internal()` (token de servicio `typ=service`, `aud=bandada-internal`; `InternalScopesGuard` exige `internal:read` en GET e `internal:write` en el resto, `403 FORBIDDEN` si falta; se desactiva con `INTERNAL_SCOPES_ENFORCED=false`).
 `/health/live` y `/health/ready` (Mongo + RabbitMQ).
 
 ## Contratos
