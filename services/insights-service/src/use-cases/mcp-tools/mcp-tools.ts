@@ -4,6 +4,7 @@ import { type DetectAnomaliesUseCase, type GetPlatformKpisUseCase, validateRange
 import type { RaiseAlertUseCase } from '../monitoring/alerts';
 import type { CallCtx, PlatformDataPort } from '../ports/platform-data.port';
 import type { SaveExternalReportUseCase } from '../reports/save-external-report';
+import { type CalculateOperation, CalculateUseCase } from './calculate';
 import { validatePromql } from './promql';
 
 export interface ToolPrincipal {
@@ -29,9 +30,10 @@ const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
 
 export const isServicePrincipal = (p: ToolPrincipal) => p.type === 'service';
 
-/** Use cases behind the 14 MCP tools of `bandadau-docs/contracts/mcp/tools.md`. Handlers return structured output (contract `outputSchema`). */
+/** Use cases behind the 20 MCP tools of `bandadau-docs/contracts/mcp/tools.md`. Handlers return structured output (contract `outputSchema`). */
 export class McpToolService {
   readonly handlers: Record<string, ToolHandler>;
+  private readonly calculator = new CalculateUseCase();
 
   constructor(
     private readonly data: PlatformDataPort,
@@ -77,6 +79,33 @@ export class McpToolService {
         validateRange(str(a.from, ''), str(a.to, ''));
         return this.data.topCreditSpenders(call(c), { from: str(a.from, ''), to: str(a.to, ''), limit: Math.min(20, Math.max(1, num(a.limit, 5))) });
       },
+      get_user_stats: (a, c) => {
+        const from = typeof a.from === 'string' ? a.from : undefined;
+        const to = typeof a.to === 'string' ? a.to : undefined;
+        if ((from === undefined) !== (to === undefined)) throw new ValidationError('from and to must be given together');
+        if (from && to) validateRange(from, to);
+        else if (to) validateRange(to, to);
+        return this.data.userStats(call(c), { from, to });
+      },
+      get_wallet_overview: (a, c) => this.data.walletOverview(call(c), { limit: Math.min(20, Math.max(1, num(a.limit, 5))) }),
+      get_ticket_stats: (a, c) => {
+        validateRange(str(a.from, ''), str(a.to, ''));
+        return this.data.ticketStats(call(c), { from: str(a.from, ''), to: str(a.to, ''), eventId: typeof a.eventId === 'string' ? a.eventId : undefined });
+      },
+      get_content_rankings: (a, c) => {
+        validateRange(str(a.from, ''), str(a.to, ''));
+        return this.data.contentRankings(call(c), { from: str(a.from, ''), to: str(a.to, ''), by: str(a.by, 'HASHTAGS') as 'HASHTAGS' | 'AUTHORS' | 'POSTS', limit: Math.min(20, Math.max(1, num(a.limit, 5))) });
+      },
+      get_event_ranking: (a, c) => {
+        validateRange(str(a.from, ''), str(a.to, ''));
+        return this.data.eventRanking(call(c), {
+          from: str(a.from, ''),
+          to: str(a.to, ''),
+          by: str(a.by, 'REGISTRATIONS') as 'REGISTRATIONS' | 'REVENUE' | 'FILL_RATE' | 'ATTENDANCE',
+          limit: Math.min(20, Math.max(1, num(a.limit, 5))),
+        });
+      },
+      calculate: async (a) => this.calculator.execute(str(a.operation, '') as CalculateOperation, Array.isArray(a.values) ? (a.values as number[]) : []),
       get_content_stats: (a, c) => {
         validateRange(str(a.from, ''), str(a.to, ''));
         return this.data.contentStats(call(c), { from: str(a.from, ''), to: str(a.to, ''), topHashtags: num(a.topHashtags, 10) });

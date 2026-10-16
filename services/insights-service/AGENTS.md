@@ -45,7 +45,7 @@ src/
 
 ## Estado de implementación (fase 2)
 
-Implementado y verificado: REST (público + `/internal/v1`), servidor MCP con las 14 herramientas (incl. `list_recent_registrations` y `get_top_credit_spenders`, que devuelven `displayName` del comprador; enmascarado en `AgentRun.steps`/logs vía `maskDisplayNamesInJson`), 2 recursos y 2 prompts,
+Implementado y verificado: REST (público + `/internal/v1`), servidor MCP con las 20 herramientas (contrato 1.3.0; incl. `list_recent_registrations`, `get_top_credit_spenders`, `get_wallet_overview` y `get_content_rankings`, que devuelven `displayName`; enmascarado en `AgentRun.steps`/logs vía `maskDisplayNamesInJson`, y los extractos de posts se sustituyen por `[texto de usuario]`; más `get_user_stats`, `get_ticket_stats`, `get_event_ranking` y `calculate`, aritmética determinista de `use-cases/mcp-tools/calculate.ts` con errores tipados `DIVISION_BY_ZERO`/`INVALID_OPERANDS`), 2 recursos y 2 prompts,
 ReportAgent, MonitoringAgent, proyección `insights-service.analytics`, outbox, Dockerfile, compose y smoke.
 
 - Agentes = clientes MCP por **HTTP loopback** (`MCP_INTERNAL_URL`) con token de servicio.

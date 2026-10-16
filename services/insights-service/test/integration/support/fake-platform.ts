@@ -33,6 +33,35 @@ export class FakePlatform implements PlatformDataPort {
     this.calls.push('topCreditSpenders');
     return { from: q.from, to: q.to, items: [{ userId: uuid(8), displayName: 'Diego Flores', creditsSpent: 40, registrations: 2 }] };
   }
+  async userStats(_c: unknown, q: { from?: string; to?: string }) {
+    this.calls.push('userStats');
+    return {
+      asOf: q.to ?? '2026-10-15',
+      totalUsers: 9,
+      activeUsers: 7,
+      suspendedUsers: 1,
+      newUsers: q.from ? 4 : null,
+      byStatus: { ACTIVE: 8, SUSPENDED: 1, PENDING_VERIFICATION: 0 },
+      byUniversity: [{ universityId: uuid(20), name: 'Universidad Mayor de San Andrés', users: 9 }],
+      byCareer: [{ career: 'Ingeniería de Sistemas', users: 4 }],
+    };
+  }
+  async walletOverview() {
+    this.calls.push('walletOverview');
+    return { creditsInCirculation: 412, walletsWithBalance: 7, averageBalance: 58.86, topBalances: [{ userId: uuid(8), displayName: 'Diego Flores', balanceCredits: 120 }] };
+  }
+  async ticketStats(_c: unknown, q: { from: string; to: string }) {
+    this.calls.push('ticketStats');
+    return { from: q.from, to: q.to, issued: 18, used: 5, voided: 2, usageRate: 0.2778, truncated: false, byEvent: [{ eventId: uuid(1), title: 'Taller de Git', issued: 9, used: 4, usageRate: 0.4444 }] };
+  }
+  async contentRankings(_c: unknown, q: { from: string; to: string; by: 'HASHTAGS' | 'AUTHORS' | 'POSTS' }) {
+    this.calls.push('contentRankings');
+    return { from: q.from, to: q.to, by: q.by, hashtags: [{ hashtag: 'bandada', posts: 3 }] };
+  }
+  async eventRanking(_c: unknown, q: { from: string; to: string; by: 'REGISTRATIONS' | 'REVENUE' | 'FILL_RATE' | 'ATTENDANCE' }) {
+    this.calls.push('eventRanking');
+    return { from: q.from, to: q.to, by: q.by, items: [{ eventId: uuid(1), title: 'Taller de Git', value: 12, registrations: 12, capacity: 30, revenueCredits: 240, usedTickets: null }] };
+  }
   async contentStats(_c: unknown, q: { from: string; to: string }) {
     this.calls.push('contentStats');
     return { from: q.from, to: q.to, totals: { posts: 8, comments: 2, reactions: 5 }, reactionsByType: { LIKE: 0, HELPFUL: 0, FUNNY: 0, SUPPORT: 0 }, daily: [{ date: '2026-10-15', posts: 8, comments: 2, reactions: 5 }], topHashtags: [{ hashtag: 'bandada', count: 3 }] };

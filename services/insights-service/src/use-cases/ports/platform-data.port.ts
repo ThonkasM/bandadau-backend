@@ -50,6 +50,48 @@ export interface TopSpendersOut {
   to: string;
   items: { userId: string; displayName: string | null; creditsSpent: number; registrations: number }[];
 }
+export interface UserStatsOut {
+  asOf: string;
+  totalUsers: number;
+  activeUsers: number;
+  suspendedUsers: number;
+  newUsers: number | null;
+  byStatus: { ACTIVE: number; SUSPENDED: number; PENDING_VERIFICATION: number };
+  byUniversity: { universityId: string; name: string; users: number }[];
+  byCareer: { career: string; users: number }[];
+}
+export interface WalletOverviewOut {
+  creditsInCirculation: number;
+  walletsWithBalance: number;
+  averageBalance: number;
+  topBalances: { userId: string; displayName: string | null; balanceCredits: number }[];
+}
+export interface TicketStatsOut {
+  from: string;
+  to: string;
+  issued: number;
+  used: number;
+  voided: number;
+  usageRate: number;
+  truncated: boolean;
+  byEvent: { eventId: string; title: string; issued: number; used: number; usageRate: number }[];
+}
+export type ContentRankingBy = 'HASHTAGS' | 'AUTHORS' | 'POSTS';
+export interface ContentRankingsOut {
+  from: string;
+  to: string;
+  by: ContentRankingBy;
+  hashtags?: { hashtag: string; posts: number }[];
+  authors?: { userId: string; displayName: string | null; posts: number }[];
+  posts?: { postId: string; excerpt: string; author: { userId: string; displayName: string | null }; reactions: number; comments: number }[];
+}
+export type EventRankingBy = 'REGISTRATIONS' | 'REVENUE' | 'FILL_RATE' | 'ATTENDANCE';
+export interface EventRankingOut {
+  from: string;
+  to: string;
+  by: EventRankingBy;
+  items: { eventId: string; title: string; value: number; registrations: number; capacity: number; revenueCredits: number; usedTickets: number | null }[];
+}
 export interface ContentStatsOut {
   from: string;
   to: string;
@@ -87,6 +129,11 @@ export interface PlatformDataPort {
   creditStats(ctx: CallCtx, q: { from: string; to: string; groupBy: 'day' | 'week' | 'month' }): Promise<CreditStatsOut>;
   listRecentRegistrations(ctx: CallCtx, q: { from?: string; to?: string; status: string; eventId?: string; limit: number }): Promise<RecentRegistrationsOut>;
   topCreditSpenders(ctx: CallCtx, q: { from: string; to: string; limit: number }): Promise<TopSpendersOut>;
+  userStats(ctx: CallCtx, q: { from?: string; to?: string }): Promise<UserStatsOut>;
+  walletOverview(ctx: CallCtx, q: { limit: number }): Promise<WalletOverviewOut>;
+  ticketStats(ctx: CallCtx, q: { from: string; to: string; eventId?: string }): Promise<TicketStatsOut>;
+  contentRankings(ctx: CallCtx, q: { from: string; to: string; by: ContentRankingBy; limit: number }): Promise<ContentRankingsOut>;
+  eventRanking(ctx: CallCtx, q: { from: string; to: string; by: EventRankingBy; limit: number }): Promise<EventRankingOut>;
   contentStats(ctx: CallCtx, q: { from: string; to: string; topHashtags: number }): Promise<ContentStatsOut>;
   flaggedContent(ctx: CallCtx, q: { source: 'AI' | 'REPORTS' | 'ALL'; limit: number }): Promise<FlaggedContentOut>;
   failedSagas(ctx: CallCtx, q: { status?: 'FAILED' | 'COMPENSATED'; since?: string; limit: number }): Promise<FailedSagasOut>;

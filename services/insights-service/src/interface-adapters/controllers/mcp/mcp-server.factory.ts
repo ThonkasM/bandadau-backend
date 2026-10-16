@@ -66,6 +66,9 @@ for (const t of MCP_TOOLS) {
   if (t.outputSchema) outputValidators.set(t.name, ajv.compile(t.outputSchema));
 }
 
+/** Post excerpts are user text: they never reach the AgentRun steps (only the structure of the answer does). */
+const maskUserText = (text: string): string => text.replace(/("excerpt"\s*:\s*")(?:[^"\\]|\\.)*(")/g, '$1[texto de usuario]$2');
+
 const redact = (tool: string, args: Record<string, unknown>): Record<string, unknown> =>
   tool === 'generate_report' ? { title: args.title, locale: args.locale, markdownChars: String(args.markdown ?? '').length } : args;
 
@@ -165,7 +168,7 @@ export class McpServerFactory {
             kind: 'TOOL_CALL',
             toolName: name,
             input: redact(name, args),
-            outputSummary: maskDisplayNamesInJson(result.text).slice(0, 500),
+            outputSummary: maskUserText(maskDisplayNamesInJson(result.text)).slice(0, 500),
             isError: result.isError,
             startedAt: started.toISOString(),
             durationMs: finished.getTime() - started.getTime(),

@@ -214,7 +214,7 @@ describe('MCP over HTTP (Streamable HTTP, stateless) with the official SDK clien
     expect(client.getServerVersion()).toMatchObject({ name: 'bandada-insights' });
     expect(client.getServerCapabilities()).toMatchObject({ tools: {}, resources: {}, prompts: {} });
     const tools = (await client.listTools()).tools.map((t) => t.name);
-    expect(tools).toHaveLength(13);
+    expect(tools).toHaveLength(19);
     expect(tools).not.toContain('raise_alert');
     const res = await client.callTool({ name: 'get_platform_kpis', arguments: { from: '2026-10-01', to: '2026-10-15' } });
     expect(res.isError).toBeUndefined();
@@ -233,7 +233,7 @@ describe('MCP over HTTP (Streamable HTTP, stateless) with the official SDK clien
   it('a service token sees raise_alert and can call it; n8n is rejected; students and app-audience tokens are refused', async () => {
     const svcClient = await connect(await h.serviceToken());
     const tools = (await svcClient.listTools()).tools.map((t) => t.name);
-    expect(tools).toHaveLength(14);
+    expect(tools).toHaveLength(20);
     const out = await svcClient.callTool({ name: 'raise_alert', arguments: { severity: 'INFO', kind: 'METRIC_ANOMALY', message: 'Prueba MCP', dedupeKey: 'METRIC_ANOMALY:it-test' } });
     expect(out.structuredContent).toMatchObject({ created: true, status: 'OPEN' });
     await svcClient.close();

@@ -1,8 +1,13 @@
 import { UpstreamUnavailableError } from '../../../entities/errors/domain-errors';
+import { maskPersonalData } from '../../../entities/policies/number-fidelity';
 import type {
   CallCtx,
+  ContentRankingBy,
+  ContentRankingsOut,
   ContentStatsOut,
   CreditStatsOut,
+  EventRankingBy,
+  EventRankingOut,
   FailedSagasOut,
   FlaggedContentOut,
   ListEventsOut,
@@ -11,7 +16,10 @@ import type {
   RecentRegistrationsOut,
   RegistrationStatsOut,
   ServiceHealthOut,
+  TicketStatsOut,
   TopSpendersOut,
+  UserStatsOut,
+  WalletOverviewOut,
 } from '../../../use-cases/ports/platform-data.port';
 import { type AuthHeaders, collectPages, collectPagesInfo, JsonClient, type Paged } from './http-json';
 
@@ -163,6 +171,112 @@ export class PlatformDataGateway implements PlatformDataPort {
       /* names are best effort */
     }
     return out;
+  }
+
+  async userStats(ctx: CallCtx, q: { from?: string; to?: string }): Promise<UserStatsOut> {
+    const [users, careers] = await Promise.all([
+      this.client('identity-service').get<Omit<UserStatsOut, 'byCareer'>>('/internal/v1/stats/users', { from: q.from, to: q.to }, this.actor(ctx)),
+      this.client('social-service').get<{ items: { career: string; users: number }[] }>('/internal/v1/stats/careers', { limit: 10 }, this.actor(ctx)),
+    ]);
+    return {
+      asOf: users.asOf,
+      totalUsers: users.totalUsers,
+      activeUsers: users.activeUsers,
+      suspendedUsers: users.suspendedUsers,
+      newUsers: users.newUsers ?? null,
+      byStatus: users.byStatus,
+      byUniversity: users.byUniversity.map((u) => ({ universityId: u.universityId, name: u.name, users: u.users })),
+      byCareer: careers.items.slice(0, 10).map((c) => ({ career: c.career, users: c.users })),
+    };
+  }
+
+  async walletOverview(ctx: CallCtx, q: { limit: number }): Promise<WalletOverviewOut> {
+    const raw = await this.client('wallet-service').get<{ creditsInCirculation: number; walletsWithBalance: number; averageBalance: number; items: { userId: string; balanceCredits: number }[] }>(
+      '/internal/v1/stats/balances',
+      { limit: Math.min(20, q.limit) },
+      this.actor(ctx),
+    );
+    const names = await this.displayNames(ctx, raw.items.map((i) => i.userId));
+    return {
+      creditsInCirculation: raw.creditsInCirculation,
+      walletsWithBalance: raw.walletsWithBalance,
+      averageBalance: raw.averageBalance,
+      topBalances: raw.items.map((i) => ({ userId: i.userId, displayName: names.get(i.userId) ?? null, balanceCredits: i.balanceCredits })),
+    };
+  }
+
+  async ticketStats(ctx: CallCtx, q: { from: string; to: string; eventId?: string }): Promise<TicketStatsOut> {
+    return this.ticketStatsTop(ctx, q, 10);
+  }
+
+  private async ticketStatsTop(ctx: CallCtx, q: { from: string; to: string; eventId?: string }, topEvents: number): Promise<TicketStatsOut> {
+    const raw = await this.client('ticketing-service').get<{
+      from: string;
+      to: string;
+      issued: number;
+      used: number;
+      voided: number;
+      usageRate: number;
+      truncated: boolean;
+      byEvent: { eventId: string; title: string; issued: number; used: number; voided: number }[];
+    }>('/internal/v1/stats/tickets', { from: q.from, to: q.to, eventId: q.eventId }, this.actor(ctx));
+    const rate = (used: number, issued: number) => (issued > 0 ? Math.round((used / issued) * 10_000) / 10_000 : 0);
+    const byEvent = [...raw.byEvent]
+      .sort((a, b) => b.used - a.used || b.issued - a.issued || a.eventId.localeCompare(b.eventId))
+      .slice(0, topEvents)
+      .map((e) => ({ eventId: e.eventId, title: e.title, issued: e.issued, used: e.used, usageRate: rate(e.used, e.issued) }));
+    return { from: raw.from, to: raw.to, issued: raw.issued, used: raw.used, voided: raw.voided, usageRate: rate(raw.used, raw.issued), truncated: Boolean(raw.truncated), byEvent };
+  }
+
+  async contentRankings(ctx: CallCtx, q: { from: string; to: string; by: ContentRankingBy; limit: number }): Promise<ContentRankingsOut> {
+    const raw = await this.client('social-service').get<{
+      hashtags?: { hashtag: string; posts: number }[];
+      authors?: { userId: string; posts: number }[];
+      posts?: { postId: string; authorId: string; excerpt: string; reactions: number; comments: number }[];
+    }>('/internal/v1/stats/rankings', { from: q.from, to: q.to, by: q.by, limit: Math.min(20, q.limit) }, this.actor(ctx));
+    const base = { from: q.from, to: q.to, by: q.by };
+    if (q.by === 'HASHTAGS') return { ...base, hashtags: (raw.hashtags ?? []).map((h) => ({ hashtag: h.hashtag, posts: h.posts })) };
+    if (q.by === 'AUTHORS') {
+      const names = await this.displayNames(ctx, (raw.authors ?? []).map((a) => a.userId));
+      return { ...base, authors: (raw.authors ?? []).map((a) => ({ userId: a.userId, displayName: names.get(a.userId) ?? null, posts: a.posts })) };
+    }
+    const names = await this.displayNames(ctx, (raw.posts ?? []).map((p) => p.authorId));
+    return {
+      ...base,
+      posts: (raw.posts ?? []).map((p) => ({
+        postId: p.postId,
+        excerpt: maskPersonalData(p.excerpt).slice(0, 80),
+        author: { userId: p.authorId, displayName: names.get(p.authorId) ?? null },
+        reactions: p.reactions,
+        comments: p.comments,
+      })),
+    };
+  }
+
+  async eventRanking(ctx: CallCtx, q: { from: string; to: string; by: EventRankingBy; limit: number }): Promise<EventRankingOut> {
+    type Row = { eventId: string; title: string; value: number; registrations: number; capacity: number; revenueCredits: number };
+    const limit = Math.min(20, q.limit);
+    const events = (query: Record<string, string | number | undefined>) =>
+      this.client('events-service').get<{ items: Row[] }>('/internal/v1/stats/event-ranking', { from: q.from, to: q.to, ...query }, this.actor(ctx));
+    if (q.by !== 'ATTENDANCE') {
+      const raw = await events({ by: q.by, limit });
+      return { from: q.from, to: q.to, by: q.by, items: raw.items.slice(0, limit).map((r) => ({ ...r, usedTickets: null })) };
+    }
+    // ATTENDANCE: ticketing-service knows who was admitted; events-service completes capacity, registrations and revenue of those events
+    const tickets = await this.ticketStatsTop(ctx, { from: q.from, to: q.to }, 20);
+    const top = tickets.byEvent.filter((e) => e.used > 0).slice(0, limit);
+    if (top.length === 0) return { from: q.from, to: q.to, by: q.by, items: [] };
+    const detail = await events({ by: 'REGISTRATIONS', ids: top.map((e) => e.eventId).join(',') });
+    const byId = new Map(detail.items.map((r) => [r.eventId, r]));
+    return {
+      from: q.from,
+      to: q.to,
+      by: q.by,
+      items: top.map((e) => {
+        const d = byId.get(e.eventId);
+        return { eventId: e.eventId, title: d?.title ?? e.title, value: e.used, registrations: d?.registrations ?? 0, capacity: d?.capacity ?? 0, revenueCredits: d?.revenueCredits ?? 0, usedTickets: e.used };
+      }),
+    };
   }
 
   creditStats(ctx: CallCtx, q: { from: string; to: string; groupBy: 'day' | 'week' | 'month' }): Promise<CreditStatsOut> {

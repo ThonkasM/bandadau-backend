@@ -41,13 +41,27 @@ const upstream: Record<string, (url: URL) => Response> = {
   'wallet-service/internal/v1/stats/top-spenders': () => json({ from: '2026-10-10', to: '2026-10-16', items: [{ userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', creditsSpent: 45, registrations: 2 }] }),
   'social-service/internal/v1/profiles': () => json({ items: [{ userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', displayName: 'Diego Flores' }] }),
   'events-service/internal/v1/sagas': () => json({ items: [{ id: '00000000-0000-7000-8000-000000000005', type: 'REGISTRATION', registrationId: '00000000-0000-7000-8000-000000000006', eventId: '01a13f35-f40e-71eb-80b9-340373caf45e', userId: '00000000-0000-7000-8000-000000000003', step: 'RELEASE_SEAT', status: 'COMPENSATED', failureReason: 'TICKET_ISSUE_FAILED', updatedAt: '2026-10-15T10:57:51Z' }], nextCursor: null }),
+  'identity-service/internal/v1/stats/users': (u) => json({ asOf: u.searchParams.get('to') ?? '2026-10-16', totalUsers: 9, activeUsers: 7, suspendedUsers: 1, newUsers: u.searchParams.get('from') ? 4 : null, byStatus: { ACTIVE: 8, SUSPENDED: 1, PENDING_VERIFICATION: 0 }, byUniversity: [{ universityId: '0192f1a2-0000-7000-8000-00000000a001', name: 'Universidad Mayor de San Andrés', users: 9 }] }),
+  'social-service/internal/v1/stats/careers': () => json({ totalProfiles: 9, items: [{ career: 'Ingeniería de Sistemas', users: 4 }, { career: 'Medicina', users: 2 }] }),
+  'wallet-service/internal/v1/stats/balances': () => json({ creditsInCirculation: 412, walletsWithBalance: 7, averageBalance: 58.86, items: [{ userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', balanceCredits: 120 }] }),
+  'ticketing-service/internal/v1/stats/tickets': () =>
+    json({ from: '2026-10-01', to: '2026-10-16', issued: 18, used: 5, voided: 2, usageRate: 0.2778, truncated: false, byEvent: [{ eventId: '0192f3b0-7c1e-7a2b-9c3d-4e5f60718293', title: 'Taller de React Native', issued: 9, used: 4, voided: 1 }, { eventId: '0192f3b0-7c1e-7a2b-9c3d-4e5f60718294', title: 'Taller de Git', issued: 9, used: 1, voided: 1 }] }),
+  'social-service/internal/v1/stats/rankings': (u) =>
+    json(
+      u.searchParams.get('by') === 'AUTHORS'
+        ? { from: '2026-10-01', to: '2026-10-16', by: 'AUTHORS', authors: [{ userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', posts: 6 }] }
+        : u.searchParams.get('by') === 'POSTS'
+          ? { from: '2026-10-01', to: '2026-10-16', by: 'POSTS', posts: [{ postId: '0192f4a0-0000-7000-8000-000000000001', authorId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', excerpt: 'Mi correo es diego@umsa.edu.bo y '.padEnd(120, 'x'), reactions: 9, comments: 3 }] }
+          : { from: '2026-10-01', to: '2026-10-16', by: 'HASHTAGS', hashtags: [{ hashtag: 'bienvenida', posts: 4 }] },
+    ),
+  'events-service/internal/v1/stats/event-ranking': (u) => json({ from: '2026-10-01', to: '2026-10-16', by: u.searchParams.get('by'), items: [{ eventId: '0192f3b0-7c1e-7a2b-9c3d-4e5f60718293', title: 'Taller de React Native', value: 9, registrations: 9, capacity: 30, revenueCredits: 225 }] }),
   'wallet-service/internal/v1/stats/credits': () => json({ from: '2026-09-01', to: '2026-10-31', groupBy: 'day', totals: { topUpCount: 7, topUpCredits: 400, debitCount: 6, debitCredits: 120, refundCount: 3, refundCredits: 60, netCredits: 340, circulatingCredits: 340 }, series: [{ date: '2026-09-01', topUpCredits: 0, debitCredits: 0, refundCredits: 0 }] }),
   'social-service/internal/v1/stats/daily': () => json({ from: '2026-10-01', to: '2026-10-31', days: [{ date: '2026-10-01', postsCreated: 2, commentsCreated: 1, reactionsSet: 3, followsCreated: 0, activeAuthors: 2, postsHidden: 0 }], topHashtags: [{ hashtag: 'bandada', count: 3 }] }),
   'media-service/internal/v1/media': () => json({ items: [{ id: '00000000-0000-7000-8000-000000000001', ownerId: '00000000-0000-7000-8000-000000000003', kind: 'IMAGE', status: 'FLAGGED', updatedAt: '2026-10-14T10:00:00Z', createdAt: '2026-10-14T09:00:00Z', moderationResults: [{ labels: ['nsfw'], scores: { nsfw: 0.91 } }] }], nextCursor: null }),
   'social-service/internal/v1/posts': () => json({ items: [{ id: '00000000-0000-7000-8000-000000000002', authorId: '00000000-0000-7000-8000-000000000004', text: 'texto largo', reportsCount: 3, updatedAt: '2026-10-14T11:00:00Z', createdAt: '2026-10-14T08:00:00Z' }], nextCursor: null }),
   'rabbitmq/api/queues': () => json([{ name: 'insights-service.analytics', messages_ready: 4, messages_unacknowledged: 0, consumers: 1 }, { name: 'x.dlq', messages_ready: 2, messages_unacknowledged: 0, consumers: 0 }]),
 };
-const hosts: Record<string, string> = { 'http://events:1': 'events-service', 'http://wallet:1': 'wallet-service', 'http://social:1': 'social-service', 'http://media:1': 'media-service', 'http://rabbit:1': 'rabbitmq' };
+const hosts: Record<string, string> = { 'http://events:1': 'events-service', 'http://wallet:1': 'wallet-service', 'http://social:1': 'social-service', 'http://media:1': 'media-service', 'http://identity:1': 'identity-service', 'http://ticketing:1': 'ticketing-service', 'http://rabbit:1': 'rabbitmq' };
 const fakeFetch = (async (input: URL | string) => {
   const url = new URL(String(input));
   const host = hosts[url.origin];
@@ -58,7 +72,7 @@ const fakeFetch = (async (input: URL | string) => {
 
 const gateway = () =>
   new PlatformDataGateway({
-    services: { 'events-service': 'http://events:1', 'wallet-service': 'http://wallet:1', 'social-service': 'http://social:1', 'media-service': 'http://media:1', 'identity-service': 'http://events:1', 'media-service ': 'x', 'ticketing-service': 'http://events:1', 'notification-service': 'http://events:1', 'insights-service': 'http://events:1', 'admin-gateway': 'http://events:1' },
+    services: { 'events-service': 'http://events:1', 'wallet-service': 'http://wallet:1', 'social-service': 'http://social:1', 'media-service': 'http://media:1', 'identity-service': 'http://identity:1', 'media-service ': 'x', 'ticketing-service': 'http://ticketing:1', 'notification-service': 'http://events:1', 'insights-service': 'http://events:1', 'admin-gateway': 'http://events:1' },
     tokens: { authHeaders: async () => ({ Authorization: 'Bearer t' }), invalidate: () => undefined },
     rabbit: { url: 'http://rabbit:1', user: 'u', password: 'p' },
     fetch: fakeFetch,
@@ -97,12 +111,12 @@ describe('MCP contract (bandadau-docs/contracts/mcp)', () => {
     expect(JSON.parse(bundled)).toEqual(JSON.parse(readFileSync(docs, 'utf8')));
   });
 
-  it('exposes the 14 contract tools (service) / 13 without raise_alert (admin) with contract names, schemas and annotations', async () => {
+  it('exposes the 20 contract tools (service) / 19 without raise_alert (admin) with contract names, schemas and annotations', async () => {
     const { factory } = serverFactory();
     const svc = await connect(factory, principal({ sub: 'insights-service', typ: 'service', roles: [], aud: ['bandada-internal'] }));
     const all = (await svc.client.listTools()).tools;
     expect(all.map((t) => t.name).sort()).toEqual(MCP_TOOLS.map((t) => t.name).sort());
-    expect(all).toHaveLength(14);
+    expect(all).toHaveLength(20);
     for (const t of MCP_TOOLS) {
       const got = all.find((x) => x.name === t.name)!;
       expect(got.inputSchema).toEqual(t.inputSchema);
@@ -112,7 +126,7 @@ describe('MCP contract (bandadau-docs/contracts/mcp)', () => {
     await svc.close();
     const adm = await connect(factory, principal({}));
     expect((await adm.client.listTools()).tools.map((t) => t.name)).not.toContain('raise_alert');
-    expect((await adm.client.listTools()).tools).toHaveLength(13);
+    expect((await adm.client.listTools()).tools).toHaveLength(19);
     await adm.close();
   });
 
@@ -141,6 +155,16 @@ describe('MCP contract (bandadau-docs/contracts/mcp)', () => {
       ['get_credit_stats', { from: '2026-09-01', to: '2026-10-31' }],
       ['list_recent_registrations', { limit: 2 }],
       ['get_top_credit_spenders', { from: '2026-10-10', to: '2026-10-16', limit: 3 }],
+      ['get_user_stats', {}],
+      ['get_user_stats', { from: '2026-10-01', to: '2026-10-16' }],
+      ['get_wallet_overview', { limit: 3 }],
+      ['get_ticket_stats', { from: '2026-10-01', to: '2026-10-16' }],
+      ['get_content_rankings', { from: '2026-10-01', to: '2026-10-16', by: 'HASHTAGS' }],
+      ['get_content_rankings', { from: '2026-10-01', to: '2026-10-16', by: 'AUTHORS', limit: 3 }],
+      ['get_content_rankings', { from: '2026-10-01', to: '2026-10-16', by: 'POSTS' }],
+      ['get_event_ranking', { from: '2026-10-01', to: '2026-10-16', by: 'REVENUE' }],
+      ['get_event_ranking', { from: '2026-10-01', to: '2026-10-16', by: 'ATTENDANCE', limit: 2 }],
+      ['calculate', { operation: 'RATIO', values: [815, 12] }],
       ['get_content_stats', { from: '2026-10-01', to: '2026-10-31' }],
       ['list_flagged_content', {}],
       ['list_failed_sagas', {}],
