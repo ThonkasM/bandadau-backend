@@ -5,6 +5,7 @@ import { hasProcessChatter, isSummaryRequest, plainAnswer, startsWithAnswer } fr
 import { deriveDataset } from '../../entities/policies/dataset-derivation';
 import { checkNumberFidelity, type FidelityContext, maskPersonalData } from '../../entities/policies/number-fidelity';
 import { dateContext, describeDateContext } from '../../entities/policies/relative-dates';
+import { routeTools } from '../../entities/policies/tool-routing';
 import type { GeneratedReport, ReportDataset } from '../../entities/report';
 import { AgentLoop } from '../agents/agent-loop';
 import type { LlmBlock, LlmMessage, LlmPort, LlmPricing } from '../ports/llm.port';
@@ -93,9 +94,10 @@ export class GenerateReportUseCase {
     try {
       mcp = await this.mcp.create({ actorId: report.requestedBy, correlationId: run.id });
       const allTools = await mcp.listTools();
-      const tools = allTools.filter((t) => (REPORT_AGENT_TOOLS as readonly string[]).includes(t.name)).sort((a, b) => a.name.localeCompare(b.name));
+      const reportTools = allTools.filter((t) => (REPORT_AGENT_TOOLS as readonly string[]).includes(t.name)).sort((a, b) => a.name.localeCompare(b.name));
       const today = this.clock.now().toISOString().slice(0, 10);
       const qa = !isSummaryRequest(report.question);
+      const tools = qa ? routeTools(report.question, reportTools) : reportTools;
       const es = report.locale === 'es';
       const system = qa ? this.prompts.qaSystem(report.locale) : this.prompts.system('report', report.locale);
       const header = es ? `Fecha de hoy: ${today} (UTC).` : `Today's date: ${today} (UTC).`;
@@ -108,6 +110,7 @@ export class GenerateReportUseCase {
         system,
         messages: [first],
         tools,
+        allowedNames: reportTools.map((t) => t.name),
         limits: REPORT_GUARDRAILS(qa ? Math.min(this.options.maxSteps, QA_MAX_TOOL_ROUNDS + 1) : this.options.maxSteps, this.options.maxTokens),
         mcp,
         meta,

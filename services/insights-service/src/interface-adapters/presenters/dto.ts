@@ -69,6 +69,7 @@ export function toAgentRunSummaryDto(r: AgentRun) {
     model: r.model ?? undefined,
     engine: r.engine ?? undefined,
     engineMode: r.engineMode ?? undefined,
+    verification: r.verification ?? undefined,
     toolsUsed: r.toolsUsed,
     tokens: { input: r.tokens.input, output: r.tokens.output, total: r.tokens.input + r.tokens.output },
     reportId: r.reportId,

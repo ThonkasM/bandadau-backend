@@ -1,5 +1,6 @@
 import { hasProcessChatter, startsWithAnswer } from '../../../src/entities/policies/answer-quality';
 import { checkNumberFidelity } from '../../../src/entities/policies/number-fidelity';
+import { routeTools } from '../../../src/entities/policies/tool-routing';
 import { StubLlmAdapter } from '../../../src/interface-adapters/gateways/llm/stub.adapter';
 import { CalculateUseCase } from '../../../src/use-cases/mcp-tools/calculate';
 import type { LlmBlock, LlmMessage } from '../../../src/use-cases/ports/llm.port';
@@ -48,7 +49,7 @@ async function run(question: string, locale: 'es' | 'en') {
   const called: { name: string; input: Obj }[] = [];
   const results: unknown[] = [];
   for (let round = 0; round < 4; round++) {
-    const res = await stub.complete({ tier: 'smart', purpose: 'collect', locale, system: 's', messages, tools: TOOLS, maxTokens: 500, meta: { question, today: TODAY } });
+    const res = await stub.complete({ tier: 'smart', purpose: 'collect', locale, system: 's', messages, tools: routeTools(question, TOOLS), maxTokens: 500, meta: { question, today: TODAY } });
     messages.push({ role: 'assistant', content: res.content });
     if (res.stopReason !== 'tool_use') break;
     const calls = res.content.filter((b): b is Extract<LlmBlock, { type: 'tool_use' }> => b.type === 'tool_use');

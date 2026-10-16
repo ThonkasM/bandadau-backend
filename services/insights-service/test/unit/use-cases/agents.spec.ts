@@ -121,7 +121,7 @@ describe('ReportAgent (UC-19) with a fake LLM and a fake MCP client', () => {
     await s.request.execute({ question: '¿Cuántas inscripciones hubo el último mes?', requestedBy: 'a', defaultLocale: 'es' });
     await s.jobs.drain();
     const first = s.llm.requests[0]!;
-    expect(first.tools?.map((t) => t.name)).toEqual(['detect_anomalies', 'get_platform_kpis', 'get_registration_stats', 'get_service_health', 'list_failed_sagas', 'list_flagged_content']);
+    expect(first.tools?.map((t) => t.name)).toEqual(['get_registration_stats']); // routed by topic (the question is about registrations)
     expect(first.system).toBe('system:qa:es');
     expect(JSON.stringify(first.messages[0])).toContain('Fecha de hoy: 2026-10-15');
     expect(first.system).not.toMatch(/2026-10-15/);

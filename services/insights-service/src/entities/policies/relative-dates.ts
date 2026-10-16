@@ -43,22 +43,10 @@ export function dateContext(today: string): DateContext {
 
 /** Text block for the model (first user message; the system prompt stays cacheable). */
 export function describeDateContext(locale: 'es' | 'en', ctx: DateContext): string {
-  const r = (x: DateRange) => `${x.from} → ${x.to}`;
+  const r = (x: DateRange) => `${x.from}→${x.to}`;
   return locale === 'es'
-    ? [
-        `Fechas resueltas por el sistema (UTC, ambos extremos incluidos; úsalas tal cual):`,
-        `- hoy: ${ctx.today} | ayer: ${ctx.yesterday}`,
-        `- esta semana (lunes → hoy): ${r(ctx.thisWeek)} | semana pasada (lunes → domingo): ${r(ctx.lastWeek)}`,
-        `- este mes: ${r(ctx.thisMonth)} | mes pasado: ${r(ctx.lastMonth)}`,
-        `- últimos 7 días: ${r(ctx.last7)} | últimos 30 días: ${r(ctx.last30)} | últimos N días: from = hoy − (N − 1), to = hoy`,
-      ].join('\n')
-    : [
-        `Dates resolved by the system (UTC, both ends included; use them as given):`,
-        `- today: ${ctx.today} | yesterday: ${ctx.yesterday}`,
-        `- this week (Monday → today): ${r(ctx.thisWeek)} | last week (Monday → Sunday): ${r(ctx.lastWeek)}`,
-        `- this month: ${r(ctx.thisMonth)} | last month: ${r(ctx.lastMonth)}`,
-        `- last 7 days: ${r(ctx.last7)} | last 30 days: ${r(ctx.last30)} | last N days: from = today − (N − 1), to = today`,
-      ].join('\n');
+    ? `Fechas resueltas (UTC, inclusive): hoy ${ctx.today}; ayer ${ctx.yesterday}; esta semana (lunes→hoy) ${r(ctx.thisWeek)}; semana pasada ${r(ctx.lastWeek)}; este mes ${r(ctx.thisMonth)}; mes pasado ${r(ctx.lastMonth)}; últimos 7 días ${r(ctx.last7)}; últimos 30 días ${r(ctx.last30)}; últimos N días: from = hoy−(N−1).`
+    : `Resolved dates (UTC, inclusive): today ${ctx.today}; yesterday ${ctx.yesterday}; this week (Monday→today) ${r(ctx.thisWeek)}; last week ${r(ctx.lastWeek)}; this month ${r(ctx.thisMonth)}; last month ${r(ctx.lastMonth)}; last 7 days ${r(ctx.last7)}; last 30 days ${r(ctx.last30)}; last N days: from = today−(N−1).`;
 }
 
 /** Every number that the date table itself implies (years, month/day numbers, lengths of the named periods). */

@@ -23,6 +23,8 @@ export interface LoopInput {
   meta?: { question?: string; today?: string };
   /** Output budget of every LLM call of the loop (default 4096; Q&A mode uses ~500). */
   maxOutputTokens?: number;
+  /** Names the agent may call even when only a routed subset is offered to the model (default: the offered tools). */
+  allowedNames?: string[];
 }
 export interface LoopOutput {
   messages: LlmMessage[];
@@ -39,7 +41,7 @@ export function compactTool(t: LlmToolDef): LlmToolDef {
     if (v && typeof v === 'object') {
       const out: Record<string, unknown> = {};
       for (const [k, x] of Object.entries(v)) {
-        if (k === 'description' && typeof x === 'string') out[k] = x.length > 90 ? `${x.slice(0, 87)}...` : x;
+        if (k === 'description' && typeof x === 'string') out[k] = x.length > 70 ? `${x.slice(0, 67)}...` : x;
         else if (k === 'examples' || k === 'title' || k === '$schema' || k === 'default') continue;
         else out[k] = strip(x);
       }
@@ -47,7 +49,7 @@ export function compactTool(t: LlmToolDef): LlmToolDef {
     }
     return v;
   };
-  return { name: t.name, description: t.description.length > 220 ? `${t.description.slice(0, 217)}...` : t.description, inputSchema: strip(t.inputSchema) as Record<string, unknown> };
+  return { name: t.name, description: t.description.length > 180 ? `${t.description.slice(0, 177)}...` : t.description, inputSchema: strip(t.inputSchema) as Record<string, unknown> };
 }
 
 const MAX_ARRAY = 40;
@@ -98,7 +100,7 @@ export class AgentLoop {
     const calledTools: { name: string; input: Record<string, unknown> }[] = [];
     const cache = new Map<string, CachedCall>();
     const offered = input.tools.map(compactTool);
-    const allowed = new Set(input.tools.map((t) => t.name));
+    const allowed = new Set(input.allowedNames ?? input.tools.map((t) => t.name));
     const startedAtMs = this.clock.now().getTime();
     let toolCalls = 0;
 

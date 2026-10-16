@@ -4,6 +4,7 @@ import { hasProcessChatter, isSummaryRequest, startsWithAnswer } from '../../../
 import { deriveDataset } from '../../../src/entities/policies/dataset-derivation';
 import { checkNumberFidelity } from '../../../src/entities/policies/number-fidelity';
 import { dateContext, daysInRange } from '../../../src/entities/policies/relative-dates';
+import { routeTools } from '../../../src/entities/policies/tool-routing';
 import { StubLlmAdapter } from '../../../src/interface-adapters/gateways/llm/stub.adapter';
 import { AgentLoop } from '../../../src/use-cases/agents/agent-loop';
 import type { LlmPort, LlmRequest, LlmResponse, LlmToolDef } from '../../../src/use-cases/ports/llm.port';
@@ -27,7 +28,7 @@ class AsStub implements LlmPort {
   }
 }
 
-function setup(llm: LlmPort, mcp = new FakeMcp({ get_credit_stats: CREDITS, get_registration_stats: REGS, calculate: (a) => ({ result: Array.isArray(a.values) ? (a.values as number[]).reduce((x, y) => x + y, 0) : 0 }) }, new Set(), TOOLS)) {
+function setup(llm: LlmPort, mcp = new FakeMcp({ get_credit_stats: CREDITS, get_registration_stats: REGS, calculate: (a: Record<string, unknown>) => ({ result: Array.isArray(a.values) ? (a.values as number[]).reduce((x, y) => x + y, 0) : 0 }) }, new Set(), TOOLS)) {
   const clock = new FakeClock();
   const reports = new MemReports();
   const runs = new MemRuns();
@@ -69,9 +70,9 @@ describe('Q&A mode (agent engine)', () => {
     const llm = new ScriptedLlm(agentScript(GOOD));
     await setup(llm).ask('¿Cuántos créditos se gastaron esta semana?');
     const text = JSON.stringify(llm.requests[0]!.messages[0]);
-    expect(text).toContain('esta semana (lunes → hoy): 2026-10-12 → 2026-10-15');
-    expect(text).toContain('semana pasada (lunes → domingo): 2026-10-05 → 2026-10-11');
-    expect(text).toContain('mes pasado: 2026-09-01 → 2026-09-30');
+    expect(text).toContain('esta semana (lunes→hoy) 2026-10-12→2026-10-15');
+    expect(text).toContain('semana pasada 2026-10-05→2026-10-11');
+    expect(text).toContain('mes pasado 2026-09-01→2026-09-30');
   });
 
   it.each([
@@ -242,5 +243,19 @@ describe('AgentLoop compaction', () => {
     expect(content).toContain('…+20 more');
     expect((out.toolResults[0] as { rows: unknown[] }).rows).toHaveLength(60);
     expect(out.toolCalls).toEqual([{ name: 'get_platform_kpis', input: {} }]);
+  });
+});
+
+describe('tool routing (Q&A offers only the tools of the question topic)', () => {
+  const ALL = ['calculate', 'detect_anomalies', 'get_content_rankings', 'get_content_stats', 'get_credit_stats', 'get_event_ranking', 'get_platform_kpis', 'get_registration_stats', 'get_service_health', 'get_ticket_stats', 'get_top_credit_spenders', 'get_user_stats', 'get_wallet_overview', 'list_events', 'list_failed_sagas', 'list_flagged_content', 'list_recent_registrations'].map((name) => ({ name }));
+  const names = (q: string) => routeTools(q, ALL).map((t) => t.name);
+  it('narrows by topic and always keeps calculate', () => {
+    expect(names('¿Cuántos usuarios están suspendidos?')).toEqual(['calculate', 'get_platform_kpis', 'get_user_stats']);
+    expect(names('¿Hay mensajes en las colas de error?')).toEqual(['calculate', 'get_service_health']);
+    expect(names('What is the platform health?')).toContain('get_service_health');
+  });
+  it('offers every tool when the topic is not recognized, and never routes to nothing', () => {
+    expect(names('cuéntame algo interesante')).toHaveLength(ALL.length);
+    expect(routeTools('¿Cuántos usuarios hay?', [{ name: 'calculate' }, { name: 'get_service_health' }]).map((t) => t.name)).toEqual(['calculate', 'get_service_health']);
   });
 });
