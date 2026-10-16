@@ -56,12 +56,12 @@ Jest corre con `NODE_OPTIONS=--experimental-vm-modules` (jose es ESM). Pruebas d
 ## Puertos y rutas
 
 Dev **7002**. Rutas públicas con prefijo `/api/v1` (Traefik no lo recorta): `profiles`, `posts`, `feed`, `groups`, `follows`, `reports`.
-Interno `/internal/v1/{posts (incl. `GET /posts/{postId}` en cualquier estado),reports,profiles,groups,stats/daily}` con `@Internal()` (token de servicio `typ=service`, `aud=bandada-internal`; `InternalScopesGuard` exige `internal:read` en GET e `internal:write` en el resto, `403 FORBIDDEN` si falta; se desactiva con `INTERNAL_SCOPES_ENFORCED=false`).
+Interno `/internal/v1/{posts (incl. `GET /posts/{postId}` y `GET /comments/{commentId}` en cualquier estado),reports,profiles,groups,stats/daily}` con `@Internal()` (token de servicio `typ=service`, `aud=bandada-internal`; `InternalScopesGuard` exige `internal:read` en GET e `internal:write` en el resto, `403 FORBIDDEN` si falta; se desactiva con `INTERNAL_SCOPES_ENFORCED=false`).
 `/health/live` y `/health/ready` (Mongo + RabbitMQ).
 
 ## Contratos
 
-Implementa `bandadau-docs/contracts/openapi/social-service.yaml` completo (23 operaciones públicas + 8 internas, mismos `operationId`; la búsqueda de grupos es `listGroups`).
+Implementa `bandadau-docs/contracts/openapi/social-service.yaml` completo (23 operaciones públicas + 9 internas, mismos `operationId`; la búsqueda de grupos es `listGroups`).
 Consume media-service `GET /internal/v1/media/{id}` y `/internal/v1/media/urls` con `ServiceTokenProvider` (`POST {IDENTITY_URL}/api/v1/auth/service-token`), timeout y circuit breaker.
 
 ## Mensajería
