@@ -1,7 +1,7 @@
 import { DomainError } from '../../entities/errors/domain-error';
 import { type ReactionCounts, type ReactionType } from '../../entities/post.entity';
 import { SocialEvents } from '../events';
-import type { Clock, EventPublisher, PostRepository, ReactionRepository, UnitOfWork } from '../ports';
+import type { Clock, EventPublisher, PostRepository, ProfileRepository, ReactionRepository, UnitOfWork } from '../ports';
 import type { PostAccess } from '../posts/post-access';
 
 export interface ReactionStateOutput {
@@ -15,6 +15,7 @@ export class SetReactionUseCase {
     private readonly posts: PostRepository,
     private readonly reactions: ReactionRepository,
     private readonly access: PostAccess,
+    private readonly profiles: ProfileRepository,
     private readonly events: EventPublisher,
     private readonly uow: UnitOfWork,
     private readonly clock: Clock,
@@ -24,11 +25,12 @@ export class SetReactionUseCase {
     const post = await this.posts.findById(input.postId);
     if (!post || !post.isInteractable || !(await this.access.canView(post, input.userId))) throw new DomainError('POST_NOT_FOUND');
     const now = this.clock.now();
+    const actorDisplayName = (await this.profiles.findById(input.userId))?.snapshot.displayName;
     await this.uow.run(async () => {
       const { previous } = await this.reactions.set(post.id, input.userId, input.type, now);
       if (previous === input.type) return;
       await this.posts.adjustReactionCounts(post.id, { add: input.type, ...(previous ? { remove: previous } : {}) });
-      await this.events.publish(SocialEvents.reactionSet(post, input.userId, input.type, previous, now));
+      await this.events.publish(SocialEvents.reactionSet(post, input.userId, input.type, previous, now, actorDisplayName));
     });
     const fresh = (await this.posts.findById(post.id)) ?? post;
     return { postId: post.id, myReaction: input.type, reactionCounts: fresh.snapshot.reactionCounts };

@@ -133,7 +133,7 @@ const repo = <T>(token: symbol, cls: new (ctx: MongoContext) => T) => ({ provide
     factory(ListGroupPostsUseCase, GROUP_REPOSITORY, MEMBERSHIP_REPOSITORY, POST_REPOSITORY, PostAssembler),
     factory(CreateCommentUseCase, POST_REPOSITORY, COMMENT_REPOSITORY, PostAccess, PostAssembler, EVENT_PUBLISHER, UNIT_OF_WORK, ID_GENERATOR, CLOCK),
     factory(ListCommentsUseCase, POST_REPOSITORY, COMMENT_REPOSITORY, PostAccess, PostAssembler),
-    factory(SetReactionUseCase, POST_REPOSITORY, REACTION_REPOSITORY, PostAccess, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
+    factory(SetReactionUseCase, POST_REPOSITORY, REACTION_REPOSITORY, PostAccess, PROFILE_REPOSITORY, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
     factory(RemoveReactionUseCase, POST_REPOSITORY, REACTION_REPOSITORY, PostAccess, UNIT_OF_WORK),
     factory(FollowUserUseCase, FOLLOW_REPOSITORY, PROFILE_REPOSITORY, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
     factory(UnfollowUserUseCase, FOLLOW_REPOSITORY, PROFILE_REPOSITORY),

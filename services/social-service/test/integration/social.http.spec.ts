@@ -191,6 +191,12 @@ describe('comments, reactions, follows', () => {
     expect(r2.body.reactionCounts).toMatchObject({ like: 0, helpful: 1 });
     expect((await h.http('DELETE', `/api/v1/posts/${post.body.id}/reactions/me`, { token: tokens.bob })).status).toBe(204);
     expect((await h.http('DELETE', `/api/v1/posts/${post.body.id}/reactions/me`, { token: tokens.bob })).status).toBe(204);
+
+    const outbox = h.mongo.db(h.db).collection('outbox');
+    for (const type of ['bandada.social.comment.created.v1', 'bandada.social.reaction.set.v1']) {
+      const ev = await outbox.findOne({ 'payload.type': type, 'payload.data.postId': post.body.id });
+      expect((ev?.payload as { data: { actorDisplayName?: string } }).data.actorDisplayName).toEqual(expect.any(String));
+    }
   });
 
   it('follow is idempotent and emits one event', async () => {
@@ -199,6 +205,8 @@ describe('comments, reactions, follows', () => {
     expect(a.status).toBe(200);
     expect(b.body.createdAt).toBe(a.body.createdAt);
     expect(await h.mongo.db(h.db).collection('outbox').countDocuments({ 'payload.type': 'bandada.social.follow.created.v1', 'payload.data.followerId': users.dan })).toBe(1);
+    const fev = await h.mongo.db(h.db).collection('outbox').findOne({ 'payload.type': 'bandada.social.follow.created.v1', 'payload.data.followerId': users.dan });
+    expect((fev?.payload as { data: { actorDisplayName?: string } }).data.actorDisplayName).toEqual(expect.any(String));
     expect((await h.http('PUT', `/api/v1/follows/${users.dan}`, { token: tokens.dan })).body.code).toBe('CANNOT_FOLLOW_SELF');
     expect((await h.http('GET', '/api/v1/follows/suggestions', { token: tokens.dan })).body).toEqual({ items: [], nextCursor: null });
   });

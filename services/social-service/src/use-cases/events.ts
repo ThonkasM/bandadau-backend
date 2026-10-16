@@ -6,6 +6,9 @@ import type { DomainEvent } from './ports/event-publisher';
 
 const iso = (d: Date): string => d.toISOString();
 
+/** Optional `actorDisplayName` (AsyncAPI 1.3.0): omitted when unknown so consumers fall back to generic text. */
+const named = (actorDisplayName?: string): { actorDisplayName?: string } => (actorDisplayName ? { actorDisplayName } : {});
+
 export const SocialEvents = {
   postCreated(post: Post, now: Date): DomainEvent {
     const p = post.snapshot;
@@ -40,11 +43,11 @@ export const SocialEvents = {
       data: { postId: post.id, authorId: post.authorId, mediaIds: [...post.mediaIds], removedBy, reportId, note, occurredAt: iso(now) },
     };
   },
-  commentCreated(comment: CommentProps, postAuthorId: string, now: Date): DomainEvent {
+  commentCreated(comment: CommentProps, postAuthorId: string, now: Date, actorDisplayName?: string): DomainEvent {
     return {
       type: 'bandada.social.comment.created.v1',
       subject: `comments/${comment.id}`,
-      data: { commentId: comment.id, postId: comment.postId, postAuthorId, authorId: comment.authorId, occurredAt: iso(now) },
+      data: { commentId: comment.id, postId: comment.postId, postAuthorId, authorId: comment.authorId, ...named(actorDisplayName), occurredAt: iso(now) },
     };
   },
   commentHidden(comment: CommentProps, status: 'HIDDEN' | 'REMOVED', reason: 'REPORTED' | 'MODERATOR', openReportsCount: number, now: Date): DomainEvent {
@@ -54,15 +57,15 @@ export const SocialEvents = {
       data: { commentId: comment.id, postId: comment.postId, authorId: comment.authorId, status, reason, openReportsCount, occurredAt: iso(now) },
     };
   },
-  reactionSet(post: Post, userId: string, type: ReactionType, previousType: ReactionType | null, now: Date): DomainEvent {
+  reactionSet(post: Post, userId: string, type: ReactionType, previousType: ReactionType | null, now: Date, actorDisplayName?: string): DomainEvent {
     return {
       type: 'bandada.social.reaction.set.v1',
       subject: `posts/${post.id}`,
-      data: { postId: post.id, postAuthorId: post.authorId, userId, type, previousType, occurredAt: iso(now) },
+      data: { postId: post.id, postAuthorId: post.authorId, userId, type, previousType, ...named(actorDisplayName), occurredAt: iso(now) },
     };
   },
-  followCreated(followerId: string, followeeId: string, now: Date): DomainEvent {
-    return { type: 'bandada.social.follow.created.v1', subject: `users/${followeeId}`, data: { followerId, followeeId, occurredAt: iso(now) } };
+  followCreated(followerId: string, followeeId: string, now: Date, actorDisplayName?: string): DomainEvent {
+    return { type: 'bandada.social.follow.created.v1', subject: `users/${followeeId}`, data: { followerId, followeeId, ...named(actorDisplayName), occurredAt: iso(now) } };
   },
   groupJoinRequested(group: Group, userId: string, membershipStatus: MembershipStatus, groupAdminIds: string[], now: Date): DomainEvent {
     const g = group.snapshot;

@@ -36,13 +36,13 @@ export class CreateCommentUseCase {
 
     const now = this.clock.now();
     const comment = newComment({ id: this.ids.next(), postId: post.id, authorId: input.authorId, parentId: input.parentId, text: input.text }, now);
+    const author = (await this.assembler.summaries([input.authorId])).get(input.authorId) as AuthorSummary;
     await this.uow.run(async () => {
       await this.comments.insert(comment);
       await this.posts.incrementComments(post.id, 1);
       if (comment.parentId) await this.comments.incrementReplyCount(comment.parentId);
-      await this.events.publish(SocialEvents.commentCreated(comment, post.authorId, now));
+      await this.events.publish(SocialEvents.commentCreated(comment, post.authorId, now, author.displayName));
     });
-    const author = (await this.assembler.summaries([input.authorId])).get(input.authorId) as AuthorSummary;
     return { comment, author };
   }
 }

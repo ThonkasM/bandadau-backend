@@ -18,9 +18,10 @@ export class FollowUserUseCase {
     const now = this.clock.now();
     const candidate = newFollow(input.followerId, input.followeeId, now);
     if (!(await this.profiles.findById(input.followeeId))) throw new DomainError('PROFILE_NOT_FOUND');
+    const actorDisplayName = (await this.profiles.findById(input.followerId))?.snapshot.displayName;
     return this.uow.run(async () => {
       const { follow, created } = await this.follows.insertIfAbsent(candidate);
-      if (created) await this.events.publish(SocialEvents.followCreated(input.followerId, input.followeeId, now));
+      if (created) await this.events.publish(SocialEvents.followCreated(input.followerId, input.followeeId, now, actorDisplayName));
       return follow;
     });
   }
