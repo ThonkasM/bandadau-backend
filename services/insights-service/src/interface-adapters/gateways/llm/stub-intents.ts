@@ -2,11 +2,21 @@ import type { Locale } from '../../../entities/locale';
 
 type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type Intent = 'LAST_BUYER' | 'RECENT_BUYERS' | 'TOP_SPENDERS' | 'TOP_EVENT' | 'CREDITS_SPENT' | 'CREDITS_TOPPED_UP' | 'NEW_USERS' | 'REGISTRATIONS_COUNT' | 'POSTS_COUNT';
+/** Intents answered with the data tools added for the admin Q&A (users, wallets, tickets, rankings, health, comparisons). */
+export type ExtraIntent =
+  | 'TOP_BALANCE' | 'CREDITS_CIRCULATION' | 'AVG_BALANCE' | 'AVG_CREDITS_PER_REG' | 'CREDITS_REFUNDED'
+  | 'USERS_TOTAL' | 'USERS_SUSPENDED' | 'USERS_BY_UNIVERSITY' | 'USERS_BY_CAREER' | 'ACTIVE_USERS'
+  | 'TICKETS_ISSUED' | 'TICKETS_USED' | 'TICKET_USAGE'
+  | 'HASHTAGS' | 'TOP_AUTHORS' | 'TOP_POST'
+  | 'EVENT_RANKING' | 'EVENTS_COUNT' | 'UPCOMING_EVENTS' | 'EVENTS_NO_ATTENDEES'
+  | 'MODERATION_PENDING' | 'SAGAS_FAILED' | 'PLATFORM_HEALTH' | 'ERROR_QUEUES'
+  | 'COMPARE_PERIODS' | 'PEAK_DAY';
 
-const DAY = 86_400_000;
-const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-const startOfDay = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
+export type Intent = ExtraIntent | 'LAST_BUYER' | 'RECENT_BUYERS' | 'TOP_SPENDERS' | 'TOP_EVENT' | 'CREDITS_SPENT' | 'CREDITS_TOPPED_UP' | 'NEW_USERS' | 'REGISTRATIONS_COUNT' | 'POSTS_COUNT';
+
+export const DAY = 86_400_000;
+export const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+export const startOfDay = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 
 const MONTHS: Record<string, number> = {
   enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
@@ -47,9 +57,84 @@ export function parseRange(question: string, today: string): { from: string; to:
 
 const has = (q: string, re: RegExp) => re.test(q);
 
+const USERS = /usuari|\busers?\b|estudiant|students?|alumn|cuentas|accounts/;
+const TICKETS = /ticket|entrada|boleto/;
+const EVENT_WORD = /evento|event|taller|workshop|hackathon|charla|curso/;
+const HOW_MANY = /cu[aá]nt[oa]s?|how\s+many|n[uú]mero|number|total|hubo|were|hay|are there/;
+
+/** Which ranking of `get_event_ranking` a question asks for (null = none). */
+export function eventRankingBy(q: string): 'REVENUE' | 'FILL_RATE' | 'ATTENDANCE' | null {
+  if (/cupo\s+m[aá]s\s+lleno|m[aá]s\s+lleno|casi\s+lleno|fill\s*rate|ocupaci[oó]n|occupancy|fullest|most\s+full|nearly\s+full|almost\s+full/.test(q)) return 'FILL_RATE';
+  if (EVENT_WORD.test(q) && /asistencia|attendance|attended|asistieron|asistentes/.test(q) && !/tasa|rate|porcentaje|percent/.test(q)) return 'ATTENDANCE';
+  if (/ingres|recaud|revenue|income|facturaci|earned/.test(q) && (EVENT_WORD.test(q) || /\btop\b|ranking/.test(q)) && !/usuari|\busers?\b|gast|spen/.test(q)) return 'REVENUE';
+  if (/cu[aá]nto\s+(ingreso|dinero|recaud)/.test(q) && EVENT_WORD.test(q)) return 'REVENUE';
+  return null;
+}
+
+/** Metric a comparison / peak-day question talks about. */
+export type MetricKey = 'REGISTRATIONS' | 'CREDITS_SPENT' | 'CREDITS_TOPPED_UP' | 'POSTS' | 'COMMENTS' | 'NEW_USERS';
+export function metricOf(q: string): MetricKey {
+  if (/recarg|top.?up/.test(q)) return 'CREDITS_TOPPED_UP';
+  if (/cr[eé]ditos?.{0,12}(gast|spen)|gasto|spend|credits?\s+spent/.test(q)) return 'CREDITS_SPENT';
+  if (/comentario|comment/.test(q)) return 'COMMENTS';
+  if (/publicaci|\bposts?\b/.test(q)) return 'POSTS';
+  if (/usuarios?\s+nuev|nuevos\s+usuarios|new\s+users|sign.?ups?/.test(q)) return 'NEW_USERS';
+  return 'REGISTRATIONS';
+}
+
+/** Questions that the new data tools answer (checked before the older intents). */
+export function detectExtra(q: string): ExtraIntent | null {
+  const spend = /gast|spen|compr|bought|purchas/;
+  if (/promedio.{0,30}cr[eé]ditos.{0,25}(inscripci|ticket|entrada|compra)|cr[eé]ditos\s+por\s+inscripci|average.{0,20}credits?.{0,20}(per|by|each)\s+(registration|ticket|purchase)/.test(q)) return 'AVG_CREDITS_PER_REG';
+  if (/saldo\s+promedio|promedio\s+de\s+saldos?|average\s+(credit\s+)?balance|promedio.{0,15}cr[eé]ditos?\s+por\s+(usuario|billetera)|average.{0,20}credits?\s+per\s+(user|wallet)/.test(q)) return 'AVG_BALANCE';
+  if (
+    (/(usuario|\buser\b|qui[eé]n|\bwho\b|persona).{0,30}(m[aá]s|mayor|highest|most|largest|biggest|top).{0,25}(cr[eé]ditos|credits|saldo|balance)|(saldo|balance)\s+(m[aá]s\s+alto|mayor|highest)|(highest|largest|biggest|top)\s+(credit\s+)?balances?|ranking de saldos/.test(q)) &&
+    !spend.test(q) &&
+    !/recarg|top.?up/.test(q)
+  )
+    return 'TOP_BALANCE';
+  if (/cr[eé]ditos?.{0,25}(circulaci[oó]n|circulantes|existen|en total|totales)|credits?.{0,20}(circulation|circulating|in total|outstanding|exist)|total credits/.test(q) && !/recarg|top.?up|gast|spen|reembols|refund|hoy|today|ayer|yesterday|semana|week|mes\b|month/.test(q)) return 'CREDITS_CIRCULATION';
+  if (/reembols|refund/.test(q) && HOW_MANY.test(q)) return 'CREDITS_REFUNDED';
+
+  if (USERS.test(q) && /suspendid|suspended|bloquead|baneado|banned/.test(q)) return 'USERS_SUSPENDED';
+  if (/universidad|universidades|universit/.test(q) && (USERS.test(q) || /cu[aá]nt|how many|m[aá]s|most|\bpor\b|\bper\b|\bby\b/.test(q)) && !EVENT_WORD.test(q)) return 'USERS_BY_UNIVERSITY';
+  if (/carrera|career|\bmajor\b/.test(q) && (USERS.test(q) || /m[aá]s|most/.test(q))) return 'USERS_BY_CAREER';
+  if (USERS.test(q) && /activ/.test(q) && HOW_MANY.test(q)) return 'ACTIVE_USERS';
+  if (
+    /cu[aá]nt[oa]s?\s+(usuarios|estudiantes|alumnos|cuentas).{0,40}(hay|registrad|tiene|existen|total|plataforma|en bandada)|how many\s+(users|students|accounts)|total\s+(de\s+)?(usuarios|users|students)|(usuarios|users)\s+(registrados|totales|in total|registered)/.test(q) &&
+    !/nuev|\bnew\b|hoy|today|ayer|yesterday|semana|week|este mes|this month|activ|suspend/.test(q)
+  )
+    return 'USERS_TOTAL';
+
+  const by = eventRankingBy(q);
+  if (by) return 'EVENT_RANKING';
+  if (/(tasa|porcentaje|%|rate|percent).{0,25}(asistencia|uso|used|attendance|usage|usados)|attendance rate|usage rate|qu[eé] porcentaje.{0,30}(usad|asisti)/.test(q)) return 'TICKET_USAGE';
+  if (TICKETS.test(q) && /usad|\bused\b|escane|scanned|validad|canjead|redeem|asisti|attended/.test(q) && HOW_MANY.test(q)) return 'TICKETS_USED';
+  if (TICKETS.test(q) && /emitid|issued|generad|se han (emitido|creado|vendido)|sold|vendid/.test(q) && HOW_MANY.test(q)) return 'TICKETS_ISSUED';
+
+  if (/hashtag/.test(q)) return 'HASHTAGS';
+  if (/qui[eé]n(es)?\s+(public[oó]|ha\s+publicado|posteo|escribi[oó])\s+m[aá]s|autor(es)?\s+m[aá]s|who\s+(posted|published|wrote)\s+(the\s+)?most|top\s+(authors|posters)|most\s+active\s+(author|poster)/.test(q)) return 'TOP_AUTHORS';
+  if (/publicaci[oó]n.{0,25}m[aá]s\s+(reaccion|comentad|popular|likes?)|\bpost.{0,25}(most|more)\s+(reactions|comments|popular)|most\s+(popular|liked|reacted|commented)\s+post/.test(q)) return 'TOP_POST';
+
+  if (/eventos?\s+(sin|(que\s+)?no\s+tienen?)\s+inscrit|events?\s+(with\s+no|without)\s+(registrations|attendees|sign.?ups)/.test(q)) return 'EVENTS_NO_ATTENDEES';
+  if (/pr[oó]ximos?\s+eventos|upcoming\s+events|next\s+events?|eventos\s+(futuros|pr[oó]ximos)/.test(q)) return 'UPCOMING_EVENTS';
+  if (/cu[aá]ntos\s+eventos|how\s+many\s+events/.test(q) && !/inscrit|registr|asist|attend/.test(q)) return 'EVENTS_COUNT';
+
+  if (/\bsagas?\b|compensad|failed\s+sagas/.test(q) && /cu[aá]nt|hay|fall|fail|how\s+many|which|qu[eé]|any/.test(q)) return 'SAGAS_FAILED';
+  if (/(colas?|queues?).{0,25}(error|dead|dlq|fall)|dead.?letter|\bdlq\b|error\s+queues?|mensajes.{0,20}(error|dlq|muertos)/.test(q)) return 'ERROR_QUEUES';
+  if (/moderaci|moderation|denunc|reportes?\s+abiertos|flagged|marcad|reported\s+content|pending\s+review|open\s+reports|contenido\s+(pendiente|marcado)/.test(q) && /cu[aá]nt|hay|pending|pendiente|how\s+many|any|is\s+there|are\s+there/.test(q)) return 'MODERATION_PENDING';
+  if (/salud|health|estado\s+de\s+(la\s+plataforma|los\s+servicios)|c[oó]mo\s+(est[aá]n|va).{0,20}(servicios|plataforma)|servicios?\s+(ca[ií]d|down|arriba|funcion)|services?\s+(up|down|status|running|healthy)|how\s+are\s+(the\s+)?services|platform\s+(status|health)|is\s+the\s+platform\s+(up|down|healthy)|are\s+(all|the)\s+services/.test(q)) return 'PLATFORM_HEALTH';
+
+  if (/compar|\bvs\.?\b|versus|respecto|frente\s+a|than\s+last|compared\s+(to|with)|difference\s+between/.test(q) && /(esta|this)\s+(semana|week)|(este|this)\s+(mes|month)/.test(q) && /pasad|last|previous|anterior/.test(q)) return 'COMPARE_PERIODS';
+  if (/d[ií]a\s+(con\s+)?m[aá]s|busiest\s+day|day\s+with\s+(the\s+)?most|peak\s+day|d[ií]a\s+pico/.test(q)) return 'PEAK_DAY';
+  return null;
+}
+
 /** The concrete question the admin asks (es/en keywords). `null` = a general question (summary report). */
 export function detectIntent(question: string): Intent | null {
   const q = question.toLowerCase();
+  const extra = detectExtra(q);
+  if (extra) return extra;
   const credits = has(q, /cr[eé]dit|credits?/);
   const eventWord = has(q, /evento|event|taller|workshop/);
 
@@ -97,14 +182,14 @@ export function detectIntent(question: string): Intent | null {
 // ---------- direct answers ----------
 
 const pad = (n: number) => String(n).padStart(2, '0');
-function dateParts(iso: string): { d: string; t: string } {
+export function dateParts(iso: string): { d: string; t: string } {
   const dt = new Date(iso);
   return { d: `${pad(dt.getUTCDate())}/${pad(dt.getUTCMonth() + 1)}/${dt.getUTCFullYear()}`, t: `${pad(dt.getUTCHours())}:${pad(dt.getUTCMinutes())}` };
 }
-const fmtDay = (locale: Locale, iso: string) => (locale === 'es' ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
-const credits = (locale: Locale, n: number) => (locale === 'es' ? `${n} ${n === 1 ? 'crédito' : 'créditos'}` : `${n} ${n === 1 ? 'credit' : 'credits'}`);
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const safeText = (s: unknown) => String(s ?? '').replace(/[*_`#<>[\]]/g, '').slice(0, 60);
+export const fmtDay = (locale: Locale, iso: string) => (locale === 'es' ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
+export const credits = (locale: Locale, n: number) => (locale === 'es' ? `${n} ${n === 1 ? 'crédito' : 'créditos'}` : `${n} ${n === 1 ? 'credit' : 'credits'}`);
+export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+export const safeText = (s: unknown) => String(s ?? '').replace(/[*_`#<>[\]]/g, '').slice(0, 60);
 
 /** "hoy" / "ayer" / "esta semana" / "entre el A y el B" for the range the data covers. */
 export function periodPhrase(locale: Locale, question: string, from: string, to: string, today: string): string {
@@ -292,6 +377,8 @@ export function buildDirectAnswer(locale: Locale, intent: Intent, question: stri
         usesNames: false,
       };
     }
+    default:
+      return null; // the intents of the newer data tools are answered by stub-answers.ts
   }
 }
 

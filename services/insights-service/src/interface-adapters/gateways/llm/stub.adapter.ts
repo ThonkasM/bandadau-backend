@@ -1,7 +1,8 @@
 import type { Locale } from '../../../entities/locale';
 import type { LlmBlock, LlmPort, LlmRequest, LlmResponse } from '../../../use-cases/ports/llm.port';
 import { textOf } from './common';
-import { buildDirectAnswer, detectIntent, parseRange } from './stub-intents';
+import { buildAnswer, followUp, planExtra } from './stub-answers';
+import { detectIntent, parseRange } from './stub-intents';
 
 type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -54,6 +55,8 @@ export function toolInput(name: string, range: { from: string; to: string }, tod
 export function planTools(question: string, range: { from: string; to: string }, offered: Set<string>, today: string = new Date().toISOString().slice(0, 10)): { name: string; input: Obj }[] {
   const intent = detectIntent(question);
   const explicit = parseRange(question, today);
+  const extra = intent ? planExtra(intent, question, offered, today) : null;
+  if (extra && extra.length > 0) return extra;
   const only = (name: string, input: Obj) => (offered.has(name) ? [{ name, input }] : []);
   if (intent === 'LAST_BUYER' || intent === 'RECENT_BUYERS') {
     return only('list_recent_registrations', { status: 'CONFIRMED', limit: intent === 'LAST_BUYER' ? 5 : 10, ...(explicit ? { from: explicit.from, to: explicit.to } : {}) });
@@ -85,7 +88,10 @@ export function toolData(messages: LlmRequest['messages']): Record<string, Obj> 
       const match = /<tool_data source="([^"]+)">([\s\S]*)<\/tool_data>/.exec(b.content);
       if (!match) continue;
       try {
-        out[match[1] as string] = JSON.parse(match[2] as string) as Obj;
+        // the same tool called twice (comparing two periods): the later results are kept as `name#2`, `name#3`…
+        let key = match[1] as string;
+        for (let n = 2; key in out; n++) key = `${match[1]}#${n}`;
+        out[key] = JSON.parse(match[2] as string) as Obj;
       } catch {
         /* truncated result: ignored */
       }
@@ -206,7 +212,7 @@ export function composeFromData(locale: Locale, data: Record<string, Obj>, ctx: 
   }
 
   const intent = ctx.question ? detectIntent(ctx.question) : null;
-  const direct = intent ? buildDirectAnswer(locale, intent, ctx.question ?? '', ctx.today ?? new Date().toISOString().slice(0, 10), data) : null;
+  const direct = intent ? buildAnswer(locale, intent, ctx.question ?? '', ctx.today ?? new Date().toISOString().slice(0, 10), data) : null;
   if (direct?.dataset) {
     dataset = direct.dataset;
     chart = direct.chart ?? { type: 'table' };
@@ -272,6 +278,10 @@ export class StubLlmAdapter implements LlmPort {
     switch (req.purpose) {
       case 'collect': {
         const done = req.messages.some((m) => m.content.some((b) => b.type === 'tool_result'));
+        const offeredNames = new Set((req.tools ?? []).map((t) => t.name));
+        const intent = detectIntent(req.meta?.question ?? '');
+        const next = done && intent && offeredNames.has('calculate') ? followUp(intent, toolData(req.messages), req.meta?.question ?? '') : null;
+        if (next) return respond([{ type: 'tool_use' as const, id: 'stub_calc', name: next.name, input: next.input }], 'tool_use');
         if (done) return respond([{ type: 'text', text: req.locale === 'es' ? 'Datos recolectados; listo para redactar el reporte.' : 'Data collected; ready to write the report.' }], 'end_turn');
         const today = req.meta?.today ?? new Date().toISOString().slice(0, 10);
         const range = inferRange(req.meta?.question ?? '', today);

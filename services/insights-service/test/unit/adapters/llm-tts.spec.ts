@@ -22,7 +22,7 @@ describe('StubLlmAdapter (deterministic default for local/CI)', () => {
     const offered = new Set(TOOL_DEFS.map((t) => t.name));
     const range = { from: '2026-09-16', to: '2026-10-15' };
     expect(planTools('¿Cuántas inscripciones hubo?', range, offered).map((p) => p.name)).toEqual(['get_platform_kpis', 'get_registration_stats']);
-    expect(planTools('¿Hay servicios caídos?', range, offered).map((p) => p.name)).toEqual(['get_platform_kpis', 'get_service_health']);
+    expect(planTools('¿Hay servicios caídos?', range, offered).map((p) => p.name)).toEqual(['get_service_health']);
     expect(planTools('hola', range, offered).map((p) => p.name)).toContain('get_registration_stats');
   });
 
