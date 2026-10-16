@@ -1,7 +1,7 @@
 import type { Document } from 'mongodb';
 
 import { DomainError } from '../../../entities/errors/domain-error';
-import { type HiddenReason, Post, type PostStatus, reactionKey, type ReactionType } from '../../../entities/post.entity';
+import { type HiddenReason, Post, type PostStatus, type PostVisibility, reactionKey, type ReactionType } from '../../../entities/post.entity';
 import type { FeedQuery, KeysetCursor, PostRepository } from '../../../use-cases/ports';
 import { isDuplicateKey, keyset, type MongoContext } from './mongo-context';
 
@@ -85,6 +85,10 @@ export class MongoPostRepository implements PostRepository {
 
   async listGroupPosts(groupId: string, cursor: KeysetCursor | null, limit: number): Promise<Post[]> {
     return (await this.posts.find({ groupId, status: 'PUBLISHED', visibility: 'GROUP', ...keyset(cursor) }, this.ctx.opts).sort(SORT_DESC).limit(limit).toArray()).map(toPost);
+  }
+
+  async listAuthorPosts(authorId: string, visibilities: readonly PostVisibility[], cursor: KeysetCursor | null, limit: number): Promise<Post[]> {
+    return (await this.posts.find({ authorId, status: 'PUBLISHED', visibility: { $in: [...visibilities] } as never, ...keyset(cursor) }, this.ctx.opts).sort(SORT_DESC).limit(limit).toArray()).map(toPost);
   }
 
   async findFeedPage(q: FeedQuery): Promise<Post[]> {

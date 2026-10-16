@@ -8,6 +8,7 @@ import { CreateCommentUseCase } from '../../../use-cases/comments/create-comment
 import { ListCommentsUseCase } from '../../../use-cases/comments/list-comments.use-case';
 import { GetFeedUseCase } from '../../../use-cases/feed/get-feed.use-case';
 import { ListGroupPostsUseCase } from '../../../use-cases/feed/list-group-posts.use-case';
+import { ListUserPostsUseCase } from '../../../use-cases/feed/list-user-posts.use-case';
 import { FollowUserUseCase, GetFollowSuggestionsUseCase, UnfollowUserUseCase } from '../../../use-cases/follows/follow.use-cases';
 import {
   CreateGroupUseCase,
@@ -61,6 +62,7 @@ export class ProfilesController {
   constructor(
     @Inject(GetProfileUseCase) private readonly getProfile: GetProfileUseCase,
     @Inject(UpdateMyProfileUseCase) private readonly updateProfile: UpdateMyProfileUseCase,
+    @Inject(ListUserPostsUseCase) private readonly userPosts: ListUserPostsUseCase,
   ) {}
 
   @Get('me')
@@ -76,6 +78,18 @@ export class ProfilesController {
   @Get(':userId')
   async byId(@CurrentUser('sub') viewerId: string, @Param('userId', id('userId')) userId: string) {
     return presentProfile(await this.getProfile.execute({ userId, viewerId }));
+  }
+
+  @Get(':userId/posts')
+  async posts(
+    @CurrentUser('sub') viewerId: string,
+    @Param('userId', id('userId')) userId: string,
+    @Query(new ZodValidationPipe(pageQuery)) q: In<typeof pageQuery>,
+  ) {
+    return page(
+      await this.userPosts.execute({ authorId: userId, viewerId, cursor: decodeCursor(q.cursor), limit: q.limit }),
+      presentFeedItem,
+    );
   }
 }
 

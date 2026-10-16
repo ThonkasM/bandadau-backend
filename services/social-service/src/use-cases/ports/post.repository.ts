@@ -1,4 +1,4 @@
-import type { HiddenReason, Post, PostStatus, ReactionType } from '../../entities/post.entity';
+import type { HiddenReason, Post, PostStatus, PostVisibility, ReactionType } from '../../entities/post.entity';
 import type { KeysetCursor } from './pagination';
 
 export const POST_REPOSITORY = Symbol('PostRepository');
@@ -26,6 +26,8 @@ export interface PostRepository {
   findPendingMedia(olderThan: Date, limit: number): Promise<Post[]>;
   listByStatus(status: PostStatus, cursor: KeysetCursor | null, limit: number): Promise<Post[]>;
   listGroupPosts(groupId: string, cursor: KeysetCursor | null, limit: number): Promise<Post[]>;
+  /** Published posts by an author, restricted to the given visibilities (profile grid, UC-04). */
+  listAuthorPosts(authorId: string, visibilities: readonly PostVisibility[], cursor: KeysetCursor | null, limit: number): Promise<Post[]>;
   findFeedPage(query: FeedQuery): Promise<Post[]>;
   countPublishedByAuthor(authorId: string): Promise<number>;
   incrementComments(postId: string, delta: number): Promise<void>;

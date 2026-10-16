@@ -24,6 +24,7 @@ import { CreateCommentUseCase } from '../../use-cases/comments/create-comment.us
 import { ListCommentsUseCase } from '../../use-cases/comments/list-comments.use-case';
 import { GetFeedUseCase } from '../../use-cases/feed/get-feed.use-case';
 import { ListGroupPostsUseCase } from '../../use-cases/feed/list-group-posts.use-case';
+import { ListUserPostsUseCase } from '../../use-cases/feed/list-user-posts.use-case';
 import { FollowUserUseCase, GetFollowSuggestionsUseCase, UnfollowUserUseCase } from '../../use-cases/follows/follow.use-cases';
 import {
   CreateGroupUseCase,
@@ -131,6 +132,7 @@ const repo = <T>(token: symbol, cls: new (ctx: MongoContext) => T) => ({ provide
     factory(DeletePostUseCase, POST_REPOSITORY, PostAccess, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
     factory(GetFeedUseCase, POST_REPOSITORY, PROFILE_REPOSITORY, FOLLOW_REPOSITORY, MEMBERSHIP_REPOSITORY, PostAssembler, CLOCK),
     factory(ListGroupPostsUseCase, GROUP_REPOSITORY, MEMBERSHIP_REPOSITORY, POST_REPOSITORY, PostAssembler),
+    factory(ListUserPostsUseCase, POST_REPOSITORY, FOLLOW_REPOSITORY, PostAssembler, CLOCK),
     factory(CreateCommentUseCase, POST_REPOSITORY, COMMENT_REPOSITORY, PostAccess, PostAssembler, EVENT_PUBLISHER, UNIT_OF_WORK, ID_GENERATOR, CLOCK),
     factory(ListCommentsUseCase, POST_REPOSITORY, COMMENT_REPOSITORY, PostAccess, PostAssembler),
     factory(SetReactionUseCase, POST_REPOSITORY, REACTION_REPOSITORY, PostAccess, PROFILE_REPOSITORY, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
