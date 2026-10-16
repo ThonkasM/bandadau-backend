@@ -156,7 +156,9 @@ export async function startHarness(options: { chaos?: boolean; strictOrganizerCh
         correlationid: uuidv7(),
       });
       const { content, options: props } = toAmqpMessage(event);
-      publishChannel.publish('bandada.commands', type, content, props as never);
+      // Straight into this run's private queue (default exchange): on a shared broker the live ticketing-service
+      // is also bound to bandada.commands and would answer the same command with a second ticket.
+      publishChannel.sendToQueue(COMMANDS_QUEUE, content, props as never);
       return event;
     },
     async waitFor(predicate, timeoutMs = 15_000) {

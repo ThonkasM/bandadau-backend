@@ -44,6 +44,18 @@ corepack pnpm dev | build | start | test | test:int | lint | typecheck | arch
 docker build --build-context shared=../bandadau-shared -f services/ticketing-service/Dockerfile -t bandada/ticketing-service:local .   # desde bandadau-backend
 ```
 
+### Pruebas de integración contra el stack local
+
+Los valores por defecto de `test/integration/setup-env.ts` (`:18006` DynamoDB, `:15706` RabbitMQ) son los de un entorno privado; contra
+el stack de `bandadau-infra` (`make infra-up`) hay que indicar los puertos publicados:
+
+```bash
+IT_DYNAMODB_ENDPOINT=http://localhost:8000 IT_RABBITMQ_URL=amqp://bandada:bandada@localhost:5672 corepack pnpm test:int
+```
+
+Cada archivo crea tablas y cola con prefijo único (`it<run>`) y las comandos se publican directo a esa cola (default exchange), así el
+`ticketing-service` real del compose no los consume. Con la credencial `AWS_ACCESS_KEY_ID/SECRET` = `local` (ya por defecto).
+
 ## Variables de entorno (`.env.example` completo)
 
 `PORT`, `NODE_ENV`, `DYNAMODB_ENDPOINT`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `TICKETING_TABLE`,
