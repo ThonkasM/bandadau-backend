@@ -191,7 +191,7 @@ export function buildDirectAnswer(locale: Locale, intent: Intent, question: stri
         answer: es
           ? `Quien más créditos gastó ${period} fue ${who(first)}, con ${credits(locale, first.creditsSpent)} en ${regs(first.registrations)}.`
           : `The top credit spender ${period} was ${who(first)}, with ${credits(locale, first.creditsSpent)} across ${regs(first.registrations)}.`,
-        bullets: items.slice(0, 5).map((i, n) => `${n + 1}. **${who(i)}**: ${credits(locale, i.creditsSpent)} (${regs(i.registrations)})`),
+        bullets: items.slice(0, 5).map((i) => `**${who(i)}**: ${credits(locale, i.creditsSpent)} (${regs(i.registrations)})`),
         dataset,
         chart: { type: 'bar', x: 'user', y: 'creditsSpent', title: cols.spent },
         usesNames: true,
@@ -222,7 +222,7 @@ export function buildDirectAnswer(locale: Locale, intent: Intent, question: stri
             : `The event with the most registrations is ${safeText(top.title)}, with ${seats} out of ${top.capacity} seats.`;
       return {
         answer,
-        bullets: items.slice(0, 5).map((e, n) => `${n + 1}. **${safeText(e.title)}**: ${e.seatsTaken}/${e.capacity}`),
+        bullets: items.slice(0, 5).map((e) => `**${safeText(e.title)}**: ${e.seatsTaken}/${e.capacity}`),
         dataset,
         chart: { type: 'bar', x: 'event', y: 'seatsTaken', title: cols.taken },
         usesNames: false,
