@@ -21,7 +21,7 @@ public record AppProperties(Jwt jwt, Identity identity, Media media, Saga saga, 
 
     public record Events(Duration defaultDuration, Duration cancellationCutoff) { }
 
-    public record Outbox(Duration relayInterval, int batchSize) { }
+    public record Outbox(Duration relayInterval, int batchSize, Duration retention, Duration purgeInterval) { }
 
     public record Rabbit(boolean declareTopology) { }
 }

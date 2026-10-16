@@ -68,7 +68,7 @@ public class BeanConfig {
     @Bean SagaMetrics sagaMetrics(MeterRegistry registry) { return new MicrometerSagaMetrics(registry); }
 
     @Bean OutboxRelay outboxRelay(JdbcClient jdbc, TransactionTemplate tx, RabbitTemplate rabbit, ObjectMapper mapper, AppProperties props) {
-        return new OutboxRelay(jdbc, tx, rabbit, mapper, props.outbox().batchSize());
+        return new OutboxRelay(jdbc, tx, rabbit, mapper, props.outbox().batchSize(), props.outbox().retention());
     }
 
     @Bean SagaPolicy sagaPolicy(AppProperties props) {

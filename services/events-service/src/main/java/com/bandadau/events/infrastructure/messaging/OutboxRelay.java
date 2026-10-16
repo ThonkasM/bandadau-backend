@@ -1,6 +1,7 @@
 package com.bandadau.events.infrastructure.messaging;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -29,13 +30,16 @@ public class OutboxRelay {
     private final RabbitTemplate rabbit;
     private final ObjectMapper mapper;
     private final int batchSize;
+    private final Duration retention;
 
-    public OutboxRelay(JdbcClient jdbc, TransactionTemplate tx, RabbitTemplate rabbit, ObjectMapper mapper, int batchSize) {
+    public OutboxRelay(JdbcClient jdbc, TransactionTemplate tx, RabbitTemplate rabbit, ObjectMapper mapper, int batchSize,
+                       Duration retention) {
         this.jdbc = jdbc;
         this.tx = tx;
         this.rabbit = rabbit;
         this.mapper = mapper;
         this.batchSize = batchSize;
+        this.retention = retention;
     }
 
     @Scheduled(fixedDelayString = "${bandada.outbox.relay-interval:PT1S}")
@@ -45,6 +49,23 @@ public class OutboxRelay {
         } catch (RuntimeException e) {
             log.warn("event=outbox.relay.failed error={}", e.toString());
         }
+    }
+
+    /** Deletes rows already published and older than the retention window (the pending ones are never touched). */
+    @Scheduled(fixedDelayString = "${bandada.outbox.purge-interval:PT1H}", initialDelayString = "${bandada.outbox.purge-interval:PT1H}")
+    public void purge() {
+        try {
+            purgePublished();
+        } catch (RuntimeException e) {
+            log.warn("event=outbox.purge.failed error={}", e.toString());
+        }
+    }
+
+    int purgePublished() {
+        int deleted = jdbc.sql("DELETE FROM outbox WHERE published_at IS NOT NULL AND published_at < now() - make_interval(secs => :secs)")
+                .param("secs", retention.toSeconds()).update();
+        if (deleted > 0) log.info("event=outbox.purged rows={} retention={}", deleted, retention);
+        return deleted;
     }
 
     void publishBatch() {

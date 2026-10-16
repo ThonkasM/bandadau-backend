@@ -89,6 +89,8 @@ bandada:
   outbox:
     relay-interval: ${OUTBOX_RELAY_INTERVAL:PT1S}
     batch-size: 100
+    retention: ${OUTBOX_RETENTION:P7D}          # filas publicadas se purgan pasado este tiempo
+    purge-interval: ${OUTBOX_PURGE_INTERVAL:PT1H}
   rabbit:
     declare-topology: ${RABBIT_DECLARE_TOPOLOGY:false}
   security:

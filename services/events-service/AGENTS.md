@@ -105,3 +105,8 @@ de UC-19/UC-20/UC-22 (estadísticas y SAGAs fallidas) y UC-23 (recordatorios n8n
 
 `definition-of-done.md` §0, §2, §3 + ArchUnit + suite SAGA con fallos inyectados en verde + prueba de
 concurrencia de cupo (N inscripciones, cupo C → exactamente C).
+
+## Outbox: intervalo y purga
+
+El relay corre cada `OUTBOX_RELAY_INTERVAL` (`PT1S` por defecto) y `OutboxRelay.purge()` borra cada `OUTBOX_PURGE_INTERVAL` (`PT1H`) las filas
+publicadas con más de `OUTBOX_RETENTION` (`P7D`); nunca toca las pendientes. Índice parcial `idx_outbox_published` (migración V2).

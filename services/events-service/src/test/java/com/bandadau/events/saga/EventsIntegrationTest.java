@@ -66,6 +66,7 @@ class EventsIntegrationTest {
     @Autowired AmqpAdmin amqpAdmin;
     @Autowired RabbitTemplate rabbit;
     @Autowired JdbcClient jdbc;
+    @Autowired com.bandadau.events.infrastructure.messaging.OutboxRelay outboxRelay;
 
     static SimulatedParticipants participants;
     static final UUID UNI = UUID.randomUUID();
@@ -696,5 +697,19 @@ class EventsIntegrationTest {
         assertThat(en.body().get("title")).isEqualTo("Resource not found");
         assertThat(call("GET", "/health/live", null, null).body()).containsEntry("status", "UP");
         assertThat(call("GET", "/health/ready", null, null).body()).containsEntry("status", "UP");
+    }
+
+    @Test
+    void outboxPurgeDeletesOnlyOldPublishedRows() {
+        UUID oldPublished = UUID.randomUUID(), recentPublished = UUID.randomUUID(), oldPending = UUID.randomUUID();
+        String insert = "INSERT INTO outbox (id, exchange, routing_key, payload, created_at, published_at) "
+                + "VALUES (:id, 'bandada.events', 'test.purge', '{}'::jsonb, now() - interval '30 days', %s)";
+        jdbc.sql(insert.formatted("now() - interval '10 days'")).param("id", oldPublished).update();
+        jdbc.sql(insert.formatted("now() - interval '1 day'")).param("id", recentPublished).update();
+        jdbc.sql(insert.formatted("NULL")).param("id", oldPending).update();
+        outboxRelay.purge();
+        List<UUID> left = jdbc.sql("SELECT id FROM outbox WHERE routing_key = 'test.purge'").query(UUID.class).list();
+        assertThat(left).containsExactlyInAnyOrder(recentPublished, oldPending);
+        jdbc.sql("DELETE FROM outbox WHERE routing_key = 'test.purge'").update();
     }
 }
