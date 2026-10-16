@@ -159,7 +159,7 @@ export class GenerateReportUseCase {
         effort: 'low',
         meta: { question: report.question },
       });
-      this.account(run, res.usage, res.model);
+      this.account(run, res.usage, run.model ?? res.model); // keep the model that wrote the answer (the audio script must not overwrite it)
       const text = res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join(' ').trim();
       return text.length > 0 ? maskPersonalData(text) : null;
     } catch (error) {
