@@ -2,9 +2,12 @@
 
 use Bandada\Wallet\Application\Port\In\CreditStatsQuery;
 use Bandada\Wallet\Application\Port\In\ListLedgerEntriesQuery;
+use Bandada\Wallet\Application\Port\In\TopSpendersQuery;
 use Bandada\Wallet\Application\Port\Out\LedgerStatsRepository;
+use Bandada\Wallet\Application\Port\Out\TopSpendersRepository;
 use Bandada\Wallet\Application\UseCase\GetCreditStatsService;
 use Bandada\Wallet\Application\UseCase\GetMyWalletService;
+use Bandada\Wallet\Application\UseCase\GetTopSpendersService;
 use Bandada\Wallet\Application\UseCase\ListLedgerEntriesService;
 use Bandada\Wallet\Domain\Exception\InvalidStatsRangeException;
 use Bandada\Wallet\Domain\Model\LedgerCursor;
@@ -89,3 +92,41 @@ it('rejects inverted or oversized ranges', function (string $from, string $to) {
 
     (new GetCreditStatsService($repo))->handle(new CreditStatsQuery(new DateTimeImmutable($from, $utc), new DateTimeImmutable($to, $utc)));
 })->with([['2026-10-09', '2026-10-01'], ['2024-01-01', '2026-10-01']])->throws(InvalidStatsRangeException::class);
+
+it('ranks top spenders with an exclusive upper bound and caps the limit at 20', function () {
+    $repo = new class implements TopSpendersRepository
+    {
+        public array $seen = [];
+
+        public function topSpenders(DateTimeImmutable $fromInclusive, DateTimeImmutable $toExclusive, int $limit): array
+        {
+            $this->seen = [$fromInclusive->format('Y-m-d'), $toExclusive->format('Y-m-d'), $limit];
+
+            return [['userId' => 'u1', 'creditsSpent' => 45, 'registrations' => 2]];
+        }
+    };
+    $utc = new DateTimeZone('UTC');
+
+    $out = (new GetTopSpendersService($repo))->handle(
+        new TopSpendersQuery(new DateTimeImmutable('2026-10-10', $utc), new DateTimeImmutable('2026-10-16', $utc), 500),
+    );
+
+    expect($out->from)->toBe('2026-10-10')->and($out->to)->toBe('2026-10-16')
+        ->and($repo->seen)->toBe(['2026-10-10', '2026-10-17', 20])
+        ->and($out->items)->toHaveCount(1);
+});
+
+it('rejects inverted or oversized ranges for top spenders', function (string $from, string $to) {
+    $repo = new class implements TopSpendersRepository
+    {
+        public function topSpenders(DateTimeImmutable $fromInclusive, DateTimeImmutable $toExclusive, int $limit): array
+        {
+            throw new LogicException('must not be reached');
+        }
+    };
+    $utc = new DateTimeZone('UTC');
+
+    (new GetTopSpendersService($repo))->handle(
+        new TopSpendersQuery(new DateTimeImmutable($from, $utc), new DateTimeImmutable($to, $utc)),
+    );
+})->with([['2026-10-09', '2026-10-01'], ['2025-01-01', '2026-10-01']])->throws(InvalidStatsRangeException::class);

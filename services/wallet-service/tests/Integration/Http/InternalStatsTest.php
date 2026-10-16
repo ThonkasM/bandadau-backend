@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\ApiHelpers;
 use Tests\Support\TestJwt;
 
@@ -36,3 +38,35 @@ it('aggregates top-ups per day and reports circulating credits', function () {
 it('validates the query', function (string $query) {
     $this->getJson("/internal/v1/stats/credits?{$query}", serviceHeaders())->assertStatus(400);
 })->with(['', 'from=2026-10-01', 'from=nope&to=2026-10-01', 'from=2026-10-09&to=2026-10-01', 'from=2026-10-01&to=2026-10-02&groupBy=year']);
+
+it('ranks top spenders by net credits (debits minus refunds) and requires internal:read', function () {
+    $now = gmdate('Y-m-d H:i:sO');
+    $ana = '0192a3bf-aaaa-7bbb-8ccc-0000000000a1';
+    $bob = '0192a3bf-aaaa-7bbb-8ccc-0000000000b2';
+    $eva = '0192a3bf-aaaa-7bbb-8ccc-0000000000e3';
+    foreach ([$ana, $bob, $eva] as $u) {
+        DB::table('wallets')->insert(['user_id' => $u, 'balance_credits' => 1000]);
+    }
+    $entry = static fn (string $user, string $type, int $amount, string $ref): array => [
+        'id' => (string) Str::uuid(), 'wallet_user_id' => $user, 'type' => $type, 'amount_credits' => $amount,
+        'balance_after' => 1000, 'operation_ref' => $ref, 'created_at' => $now,
+    ];
+    DB::table('ledger_entries')->insert([
+        $entry($ana, 'DEBIT', 25, 'DEBIT:t-1'), $entry($ana, 'DEBIT', 20, 'DEBIT:t-2'),
+        $entry($bob, 'DEBIT', 30, 'DEBIT:t-3'), $entry($bob, 'REFUND', 30, 'REFUND:t-3'),
+        $entry($eva, 'DEBIT', 10, 'DEBIT:t-4'), $entry($eva, 'TOPUP', 100, 'TOPUP:t-5'),
+    ]);
+    $today = gmdate('Y-m-d');
+
+    $this->getJson("/internal/v1/stats/top-spenders?from={$today}&to={$today}&limit=5", serviceHeaders())
+        ->assertOk()
+        ->assertJsonCount(2, 'items')
+        ->assertJsonPath('items.0', ['userId' => $ana, 'creditsSpent' => 45, 'registrations' => 2])
+        ->assertJsonPath('items.1', ['userId' => $eva, 'creditsSpent' => 10, 'registrations' => 1]);
+    $this->getJson("/internal/v1/stats/top-spenders?from={$today}&to={$today}&limit=1", serviceHeaders())->assertOk()->assertJsonCount(1, 'items');
+    $this->getJson("/internal/v1/stats/top-spenders?from={$today}&to={$today}", [])->assertStatus(401);
+    $this->getJson("/internal/v1/stats/top-spenders?from={$today}&to={$today}", serviceHeaders('mcp:tools'))->assertStatus(403);
+    foreach (['', "from={$today}", "from={$today}&to={$today}&limit=21", "from={$today}&to={$today}&limit=0", 'from=2026-10-09&to=2026-10-01'] as $query) {
+        $this->getJson("/internal/v1/stats/top-spenders?{$query}", serviceHeaders())->assertStatus(400);
+    }
+});

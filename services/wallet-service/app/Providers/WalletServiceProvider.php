@@ -24,6 +24,7 @@ use Bandada\Wallet\Adapter\Out\Messaging\OutboxRelay;
 use Bandada\Wallet\Adapter\Out\Persistence\PgInbox;
 use Bandada\Wallet\Adapter\Out\Persistence\PgLedgerRepository;
 use Bandada\Wallet\Adapter\Out\Persistence\PgLedgerStatsRepository;
+use Bandada\Wallet\Adapter\Out\Persistence\PgTopSpendersRepository;
 use Bandada\Wallet\Adapter\Out\Persistence\PgTopUpRepository;
 use Bandada\Wallet\Adapter\Out\Persistence\PgWalletRepository;
 use Bandada\Wallet\Adapter\Out\Persistence\PostgresTransactionManager;
@@ -35,6 +36,7 @@ use Bandada\Wallet\Application\Port\In\DebitCreditsUseCase;
 use Bandada\Wallet\Application\Port\In\ExpireTopUpsUseCase;
 use Bandada\Wallet\Application\Port\In\GetCreditStatsUseCase;
 use Bandada\Wallet\Application\Port\In\GetMyWalletUseCase;
+use Bandada\Wallet\Application\Port\In\GetTopSpendersUseCase;
 use Bandada\Wallet\Application\Port\In\GetTopUpUseCase;
 use Bandada\Wallet\Application\Port\In\HandlePaymentWebhookUseCase;
 use Bandada\Wallet\Application\Port\In\ListLedgerEntriesUseCase;
@@ -47,6 +49,7 @@ use Bandada\Wallet\Application\Port\Out\Inbox;
 use Bandada\Wallet\Application\Port\Out\LedgerRepository;
 use Bandada\Wallet\Application\Port\Out\LedgerStatsRepository;
 use Bandada\Wallet\Application\Port\Out\PaymentGateway;
+use Bandada\Wallet\Application\Port\Out\TopSpendersRepository;
 use Bandada\Wallet\Application\Port\Out\TopUpRepository;
 use Bandada\Wallet\Application\Port\Out\TransactionManager;
 use Bandada\Wallet\Application\Port\Out\WalletRepository;
@@ -55,6 +58,7 @@ use Bandada\Wallet\Application\UseCase\DebitCreditsService;
 use Bandada\Wallet\Application\UseCase\ExpireTopUpsService;
 use Bandada\Wallet\Application\UseCase\GetCreditStatsService;
 use Bandada\Wallet\Application\UseCase\GetMyWalletService;
+use Bandada\Wallet\Application\UseCase\GetTopSpendersService;
 use Bandada\Wallet\Application\UseCase\GetTopUpService;
 use Bandada\Wallet\Application\UseCase\HandlePaymentWebhookService;
 use Bandada\Wallet\Application\UseCase\ListLedgerEntriesService;
@@ -125,6 +129,7 @@ class WalletServiceProvider extends ServiceProvider
         $this->app->bind(TopUpRepository::class, PgTopUpRepository::class);
         $this->app->bind(Inbox::class, PgInbox::class);
         $this->app->bind(LedgerStatsRepository::class, PgLedgerStatsRepository::class);
+        $this->app->bind(TopSpendersRepository::class, PgTopSpendersRepository::class);
         $this->app->bind(PaymentGateway::class, fn (): PaymentGateway => new SimulatedPaymentGateway(
             (string) config('wallet.payment.checkout_base_url'),
             (bool) config('wallet.payment.simulator_enabled'),
@@ -157,6 +162,7 @@ class WalletServiceProvider extends ServiceProvider
         $this->app->bind(DebitCreditsUseCase::class, DebitCreditsService::class);
         $this->app->bind(RefundCreditsUseCase::class, RefundCreditsService::class);
         $this->app->bind(GetCreditStatsUseCase::class, GetCreditStatsService::class);
+        $this->app->bind(GetTopSpendersUseCase::class, GetTopSpendersService::class);
         $this->app->bind(ExpireTopUpsUseCase::class, ExpireTopUpsService::class);
         $this->app->bind(CreateTopUpUseCase::class, fn (Application $app): CreateTopUpUseCase => new CreateTopUpService(
             $app->make(TopUpRepository::class),

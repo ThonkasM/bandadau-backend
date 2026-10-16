@@ -624,6 +624,32 @@ class EventsIntegrationTest {
 
         Resp regs = call("GET", "/internal/v1/events/" + eventId + "/registrations?status=CONFIRMED", null, svc);
         assertThat((List<?>) regs.body().get("items")).hasSize(1);
+        // cross-event feed: newest confirmed first, scoped by status/event/range, paginated, scope-protected
+        UUID second = funded(100);
+        String reg2 = (String) register(eventId, second, key()).body().get("id");
+        awaitStatus(reg2, second, "CONFIRMED");
+        Resp feedAll = call("GET", "/internal/v1/registrations?status=CONFIRMED&limit=50", null, svc);
+        assertThat(feedAll.status()).isEqualTo(200);
+        @SuppressWarnings("unchecked") List<Map<String, Object>> feedItems = (List<Map<String, Object>>) feedAll.body().get("items");
+        assertThat(feedItems).isNotEmpty();
+        assertThat(feedItems.get(0).get("id")).isEqualTo(reg2);
+        assertThat(feedItems).allMatch(r -> "CONFIRMED".equals(r.get("status")) && r.get("confirmedAt") != null);
+        assertThat(feedItems.stream().map(r -> (String) r.get("confirmedAt")).toList()).isSortedAccordingTo(java.util.Comparator.reverseOrder());
+        Resp byEvent = call("GET", "/internal/v1/registrations?eventId=" + eventId + "&limit=1", null, svc);
+        assertThat((List<?>) byEvent.body().get("items")).hasSize(1);
+        assertThat(byEvent.body().get("nextCursor")).isNotNull();
+        Resp page2 = call("GET", "/internal/v1/registrations?status=CONFIRMED&eventId=" + eventId + "&limit=1&cursor=" + call("GET", "/internal/v1/registrations?status=CONFIRMED&eventId=" + eventId + "&limit=1", null, svc).body().get("nextCursor"), null, svc);
+        assertThat(page2.status()).isEqualTo(200);
+        @SuppressWarnings("unchecked") Map<String, Object> older = ((List<Map<String, Object>>) page2.body().get("items")).get(0);
+        assertThat(older.get("id")).isEqualTo(regId);
+        assertThat(((Map<?, ?>) older.get("event")).get("title")).isNotNull();
+        assertThat(call("GET", "/internal/v1/registrations?from=" + today + "&to=" + today + "&status=CONFIRMED", null, svc).status()).isEqualTo(200);
+        assertThat(call("GET", "/internal/v1/registrations?from=2026-12-31&to=2026-01-01", null, svc).status()).isEqualTo(400);
+        assertThat(call("GET", "/internal/v1/registrations?limit=51", null, svc).status()).isEqualTo(400);
+        assertThat(call("GET", "/internal/v1/registrations?cursor=zzz", null, svc).status()).isEqualTo(400);
+        assertThat(call("GET", "/internal/v1/registrations", null, student(user)).status()).isEqualTo(403);
+        assertThat(call("GET", "/internal/v1/registrations", null, neighbours.serviceTokenWithScope("internal:write")).status()).isEqualTo(403);
+
         Resp evs = call("GET", "/internal/v1/events?status=PUBLISHED", null, svc);
         assertThat(evs.status()).isEqualTo(200);
 

@@ -1,6 +1,7 @@
 package com.bandadau.events.interfaces.internal;
 
 import com.bandadau.events.application.port.MediaCatalog;
+import com.bandadau.events.application.port.RegistrationFeedQuery;
 import com.bandadau.events.application.port.RegistrationStatsQuery;
 import com.bandadau.events.application.port.RegistrationStatsQuery.Counts;
 import com.bandadau.events.application.registration.RegistrationService;
@@ -38,15 +39,18 @@ public class InternalController {
     private final RegistrationService registrations;
     private final RegistrationStatsQuery stats;
     private final MediaCatalog media;
+    private final RegistrationFeedQuery feed;
 
     public InternalController(SagaQueries sagaQueries, RegistrationSagaOrchestrator orchestrator, EventService events,
-                              RegistrationService registrations, RegistrationStatsQuery stats, MediaCatalog media) {
+                              RegistrationService registrations, RegistrationStatsQuery stats, MediaCatalog media,
+                              RegistrationFeedQuery feed) {
         this.sagaQueries = sagaQueries;
         this.orchestrator = orchestrator;
         this.events = events;
         this.registrations = registrations;
         this.stats = stats;
         this.media = media;
+        this.feed = feed;
     }
 
     private static int limit(int limit) {
@@ -94,6 +98,23 @@ public class InternalController {
         var summary = EventSummary.from(registrations.event(new EventId(eventId)));
         return PageResponse.from(registrations.listByEvent(new EventId(eventId), status, cursor, limit(limit)),
                 r -> RegistrationResponse.from(r, summary));
+    }
+
+    @GetMapping("/registrations")
+    public PageResponse<RegistrationResponse> listRegistrationsInternal(
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) RegistrationStatus status,
+            @RequestParam(required = false) UUID eventId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int limit) {
+        if (from != null && to != null) {
+            if (to.isBefore(from)) throw Errors.validation("to", "INVALID_FORMAT");
+            if (ChronoUnit.DAYS.between(from, to) > 366) throw Errors.validation("to", "TOO_LARGE");
+        }
+        return PageResponse.from(feed.list(from, to, status, eventId, cursor, limit(limit)), r -> new RegistrationResponse(
+                r.id(), r.eventId(), r.userId(), new EventSummary(r.eventId(), r.eventTitle(), r.eventStartsAt(), r.eventEndsAt(), r.venue()),
+                r.status().name(), r.failureReason(), r.priceCredits(), r.ticketId(), r.createdAt(), r.updatedAt(), r.confirmedAt(), r.cancelledAt()));
     }
 
     @GetMapping("/stats/registrations")
