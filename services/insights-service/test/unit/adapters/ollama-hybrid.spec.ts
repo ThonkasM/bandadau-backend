@@ -86,28 +86,52 @@ describe('OllamaHybridAdapter (small local model: code decides facts)', () => {
     await expect(new OllamaHybridAdapter({ ollama: down(), fallback: 'none', model: 'm' }).complete(collect('cómo va la comunidad'))).rejects.toBeInstanceOf(LlmUnavailableError);
   });
 
-  it('uses the model wording when its figures and names are grounded in the tool data', async () => {
-    const { ollama, requests } = ollamaServer(() => say({ answer: 'El último ticket lo compró Diego Flores, quien pagó 25 créditos por Taller de React Native.' }));
-    const llm = new OllamaHybridAdapter({ ollama, fallback: 'stub', model: 'qwen2.5:3b' });
-    const res = await llm.complete(compose('¿Quién compró el último ticket?', 'es', result('list_recent_registrations', buyers)));
+  const DRAFT_ES = 'El último ticket lo compró Diego Flores (Taller de React Native, 25 créditos) el 16/10/2026 a las 14:32 (UTC).';
+  const askModel = async (answer: string, question = '¿Quién compró el último ticket?', locale: 'es' | 'en' = 'es') => {
+    const { ollama, requests } = ollamaServer(() => say({ answer }));
+    const res = await new OllamaHybridAdapter({ ollama, fallback: 'stub', model: 'qwen2.5:3b' }).complete(compose(question, locale, result('list_recent_registrations', buyers)));
     const composed = parseComposed((res.content[0] as { text: string }).text);
-    expect(composed.markdown.split('\n')[0]).toBe('El último ticket lo compró Diego Flores, quien pagó 25 créditos por Taller de React Native.');
+    return { res, requests, first: composed.markdown.split('\n')[0], composed };
+  };
+
+  it('uses the model wording when it keeps every key fact of the draft; the model only sees the draft, not the data', async () => {
+    const good = 'Quien compró el último ticket fue Diego Flores, que pagó 25 créditos por Taller de React Native el 16/10/2026 a las 14:32 (UTC).';
+    const { res, requests, first, composed } = await askModel(good);
+    expect(first).toBe(good);
     expect(composed.markdown).toContain('## Detalle');
     expect(res.model).toBe('qwen2.5:3b');
-    expect(requests[0]!.messages[1].content).toContain('Diego Flores'); // facts travel to the model, the request is in the AgentRun audit via model/provider
+    expect(requests[0]!.options.num_predict).toBeLessThanOrEqual(80);
+    expect(requests[0]!.options.temperature).toBe(0);
+    expect(requests[0]!.messages[1].content).toContain(DRAFT_ES);
+    expect(requests[0]!.messages[1].content).not.toContain('registrationId');
   });
 
   it.each([
-    ['invented figure', 'El último ticket lo compró Diego Flores y pagó 99 créditos.'],
-    ['invented name', 'El último ticket lo compró Carlos Mamani por 25 créditos.'],
+    ['repeated name (real failure seen with qwen2.5:3b)', 'Marco Rojas Marco Rojas'],
+    ['repeated bigram', 'El último ticket lo compró Diego Flores y Diego Flores pagó 25 créditos por Taller de React Native el 16/10/2026 a las 14:32.'],
+    ['invented figure', 'El último ticket lo compró Diego Flores (Taller de React Native, 99 créditos) el 16/10/2026 a las 14:32 (UTC).'],
+    ['missing time', 'El último ticket lo compró Diego Flores por 25 créditos para Taller de React Native el 16/10/2026.'],
+    ['missing event title', 'El último ticket lo compró Diego Flores por 25 créditos el 16/10/2026 a las 14:32 (UTC) sin más datos.'],
+    ['wrong language', 'The last ticket was bought by Diego Flores (Taller de React Native, 25 credits) on 16/10/2026 at 14:32 (UTC).'],
+    ['CJK characters', 'El último ticket lo compró Diego Flores 最后 (Taller de React Native, 25 créditos) el 16/10/2026 a las 14:32 (UTC).'],
+    ['too short', 'Diego Flores compró 25 créditos.'],
+    ['no final period', 'El último ticket lo compró Diego Flores (Taller de React Native, 25 créditos) el 16/10/2026 a las 14:32 (UTC)'],
+    ['lowercase start', 'el último ticket lo compró Diego Flores (Taller de React Native, 25 créditos) el 16/10/2026 a las 14:32 (UTC).'],
+    ['invented name', 'El último ticket lo compró Carlos Mamani (Taller de React Native, 25 créditos) el 16/10/2026 a las 14:32 (UTC).'],
     ['multi-line markdown', 'Diego Flores compró.\n\n## Otra cosa'],
     ['empty answer', ''],
-  ])('discards an ungrounded answer (%s) and keeps the deterministic one', async (_n, answer) => {
-    const { ollama } = ollamaServer(() => say({ answer }));
-    const res = await new OllamaHybridAdapter({ ollama, fallback: 'stub', model: 'qwen2.5:3b' }).complete(compose('¿Quién compró el último ticket?', 'es', result('list_recent_registrations', buyers)));
-    const composed = parseComposed((res.content[0] as { text: string }).text);
-    expect(composed.markdown.split('\n')[0]).toBe('El último ticket lo compró Diego Flores (Taller de React Native, 25 créditos) el 16/10/2026 a las 14:32 (UTC).');
+  ])('discards a bad rewrite (%s), keeps the draft and records +stub-fallback', async (_n, bad) => {
+    const { res, first } = await askModel(bad);
+    expect(first).toBe(DRAFT_ES);
     expect(res.model).toBe('qwen2.5:3b+stub-fallback');
+  });
+
+  it('does not ask the model to rewrite generic summaries (headings)', async () => {
+    const { ollama, requests } = ollamaServer(() => say({ answer: 'x' }));
+    const kpis = { from: '2026-09-17', to: TODAY, activeUsers: 1, newUsers: 2, posts: 3, comments: 0, reactions: 0, registrationsConfirmed: 0, registrationsFailed: 0, registrationsCancelled: 0, creditsToppedUp: 0, creditsSpent: 0, flaggedContent: 0, openAlerts: 0, series: [] };
+    const res = await new OllamaHybridAdapter({ ollama, fallback: 'stub', model: 'm' }).complete(compose('resumen general', 'es', result('get_platform_kpis', kpis)));
+    expect(requests).toHaveLength(0);
+    expect(res.model).toBe('stub-deterministic-1');
   });
 
   it('timeout while writing: deterministic answer with fallback=stub (provider recorded), error with none', async () => {

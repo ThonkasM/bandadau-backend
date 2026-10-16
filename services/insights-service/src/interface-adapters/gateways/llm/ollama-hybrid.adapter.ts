@@ -69,11 +69,49 @@ export function isGroundedAnswer(answer: string, data: Record<string, Obj>): boo
   if (!numbersOk) return false;
   const haystack = JSON.stringify(data).toLowerCase();
   const words = a.replace(/[.,;:()¿?¡!"'«»]/g, ' ').split(/\s+/).filter(Boolean);
-  return words.every((w) => {
-    if (!/^\p{Lu}/u.test(w)) return true;
+  return words.every((w, i) => {
+    if (i === 0 || !/^\p{Lu}/u.test(w)) return true; // the first word is capitalized by grammar, not by being a name
     const lw = w.toLowerCase();
     return COMMON.has(lw) || haystack.includes(lw);
   });
+}
+
+const FOREIGN_SCRIPT = /[\u0400-\u04FF\u0590-\u06FF\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/;
+const EN_WORDS = /\b(the|was|were|with|bought|spent|of)\b/i;
+const ES_WORDS = /\b(el|la|los|fue|fueron|con|compró|gastó|por|de)\b/i;
+
+function stringLeaves(value: unknown, into: string[] = []): string[] {
+  if (typeof value === 'string') into.push(value);
+  else if (Array.isArray(value)) for (const v of value) stringLeaves(v, into);
+  else if (value && typeof value === 'object') for (const v of Object.values(value)) stringLeaves(v, into);
+  return into;
+}
+
+/**
+ * The rewritten line must keep EVERY key fact of the deterministic draft (names/titles taken from the tool data, every figure, date and time
+ * token), be one natural sentence (8-60 words, capitalized, ends with a period, no repeated words or bigrams, no foreign scripts, right language)
+ * and add nothing that is not in the data. One failed check => the caller keeps the draft.
+ */
+export function isAcceptableRewrite(answer: string, draft: string, data: Record<string, Obj>, locale: 'es' | 'en'): boolean {
+  const a = answer.trim();
+  if (!isGroundedAnswer(a, data)) return false;
+  const words = a.split(/\s+/).filter(Boolean);
+  if (words.length < 8 || words.length > 60) return false;
+  if (!/^\p{Lu}/u.test(a) || !a.endsWith('.')) return false;
+  if (FOREIGN_SCRIPT.test(a)) return false;
+  if (locale === 'es' ? EN_WORDS.test(a) : ES_WORDS.test(a)) return false;
+  const norm = words.map((w) => w.toLowerCase().replace(/[.,;:()¿?¡!"'«»]/g, ''));
+  for (let i = 1; i < norm.length; i++) if (norm[i] === norm[i - 1]) return false;
+  const seen = new Set<string>();
+  for (let i = 1; i < norm.length; i++) {
+    const bi = `${norm[i - 1]} ${norm[i]}`;
+    if (seen.has(bi)) return false;
+    seen.add(bi);
+  }
+  const keyStrings = [...new Set(stringLeaves(data))].filter((v) => v.length >= 3 && v.length <= 80 && draft.includes(v));
+  if (!keyStrings.every((k) => a.includes(k))) return false;
+  const tokens = draft.match(/\d[\d/:.,]*\d|\d/g) ?? [];
+  return tokens.every((t) => a.includes(t));
 }
 
 /**
@@ -145,18 +183,20 @@ export class OllamaHybridAdapter implements LlmPort {
     };
     const question = (req.meta?.question ?? '').slice(0, MAX_QUESTION);
     if (req.purpose === 'correct' || !question || Object.keys(data).length === 0) return deterministic;
-    const facts = JSON.stringify(data).slice(0, 6000);
     const es = req.locale === 'es';
+    const draftLine = draft.markdown.split('\n')[0] ?? '';
+    // generic summaries start with a heading: nothing to rephrase
+    if (draftLine.startsWith('#')) return deterministic;
     try {
       const res = await this.o.ollama.complete({
         ...req,
         purpose: 'compose',
         tools: undefined,
-        maxTokens: 160,
+        maxTokens: 80,
         system: es
-          ? 'Eres el analista de Bandada U. Responde la pregunta en UNA sola oración en español, usando SOLO las cifras y nombres de los datos dados. Sin Markdown, sin listas, sin inventar. Si los datos no alcanzan, dilo.'
-          : 'You are the Bandada U analyst. Answer the question in ONE sentence in English, using ONLY the figures and names in the given data. No Markdown, no lists, no invention. If the data is not enough, say so.',
-        messages: [{ role: 'user', content: [{ type: 'text', text: `${es ? 'Pregunta' : 'Question'}: ${question}\n${es ? 'Datos' : 'Data'} (JSON): ${facts}\n${es ? 'Borrador verificado' : 'Verified draft'}: ${draft.markdown.split('\n')[0]}` }] }],
+          ? 'Reescribe la oración del borrador en español natural, en UNA sola oración. Conserva TODOS los nombres, cifras, fechas y horas exactamente como están, sin agregar nada y sin repetir palabras. Ejemplos: Borrador: «Hoy se gastaron 105 créditos en inscripciones.» -> «Durante hoy se gastaron en total 105 créditos en inscripciones.» | Borrador: «Hoy se registraron 3 usuarios nuevos.» -> «Hoy se registraron 3 usuarios nuevos en la plataforma.» Responde en JSON {"answer": "..."}.'
+          : 'Rewrite the draft sentence in natural English, as ONE sentence. Keep ALL names, figures, dates and times exactly as they are, add nothing and repeat no words. Examples: Draft: "Today, 105 credits were spent on registrations." -> "Today, a total of 105 credits were spent on registrations." | Draft: "Today, 3 new users signed up." -> "Today, 3 new users signed up on the platform." Reply as JSON {"answer": "..."}.',
+        messages: [{ role: 'user', content: [{ type: 'text', text: `${es ? 'Pregunta' : 'Question'}: ${question}\n${es ? 'Borrador' : 'Draft'}: ${draftLine}` }] }],
         responseSchema: ANSWER_SCHEMA,
       });
       let answer = '';
@@ -165,10 +205,9 @@ export class OllamaHybridAdapter implements LlmPort {
       } catch {
         answer = '';
       }
-      if (!isGroundedAnswer(answer, data)) return { ...deterministic, usage: res.usage, model: `${this.o.model}+stub-fallback` };
+      if (!isAcceptableRewrite(answer, draftLine, data, req.locale)) return { ...deterministic, usage: res.usage, model: `${this.o.model}+stub-fallback` };
       const lines = draft.markdown.split('\n');
-      const rest = lines[0]?.startsWith('#') ? lines : lines.slice(1);
-      const markdown = [answer, '', ...rest.slice(rest[0] === '' ? 1 : 0)].join('\n');
+      const markdown = [answer, ...lines.slice(1)].join('\n');
       return { ...res, stopReason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ ...draft, markdown }) }], model: this.o.model };
     } catch (error) {
       if (this.o.fallback === 'none') throw error;
