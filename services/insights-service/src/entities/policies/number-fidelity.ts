@@ -86,3 +86,17 @@ const UUID_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\
 export function maskPersonalData(text: string): string {
   return text.replace(EMAIL_RE, '[email]').replace(UUID_RE, '[id]');
 }
+
+/** "Diego Flores" -> "Diego F." (log masking of buyers' display names; decision of agentes-y-reportes-generativos.md). */
+export function maskDisplayName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  const [first, ...rest] = parts as [string, ...string[]];
+  const last = rest[rest.length - 1];
+  return last ? `${first} ${[...last][0]}.` : `${[...first][0]}.`;
+}
+
+/** Masks every `"displayName":"..."` of a JSON text (tool outputs stored in AgentRun steps / logs). The model still receives the full text. */
+export function maskDisplayNamesInJson(text: string): string {
+  return text.replace(/("displayName"\s*:\s*")((?:[^"\\]|\\.)*)(")/g, (_m, a: string, name: string, z: string) => `${a}${maskDisplayName(name)}${z}`);
+}

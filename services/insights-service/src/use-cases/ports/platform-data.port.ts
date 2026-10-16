@@ -33,6 +33,23 @@ export interface CreditStatsOut {
   };
   series: { date: string; topUpCredits: number; debitCredits: number; refundCredits: number }[];
 }
+export interface RecentRegistrationsOut {
+  truncated: boolean;
+  items: {
+    registrationId: string;
+    ticketId: string | null;
+    event: { id: string; title: string };
+    buyer: { userId: string; displayName: string | null };
+    creditsPaid: number;
+    status: string;
+    confirmedAt: string | null;
+  }[];
+}
+export interface TopSpendersOut {
+  from: string;
+  to: string;
+  items: { userId: string; displayName: string | null; creditsSpent: number; registrations: number }[];
+}
 export interface ContentStatsOut {
   from: string;
   to: string;
@@ -68,6 +85,8 @@ export interface PlatformDataPort {
   registrationStats(ctx: CallCtx, q: { from: string; to: string; groupBy: 'day' | 'event' | 'status'; eventId?: string }): Promise<RegistrationStatsOut>;
   listEvents(ctx: CallCtx, q: { from: string; to: string; status?: string; limit: number }): Promise<ListEventsOut>;
   creditStats(ctx: CallCtx, q: { from: string; to: string; groupBy: 'day' | 'week' | 'month' }): Promise<CreditStatsOut>;
+  listRecentRegistrations(ctx: CallCtx, q: { from?: string; to?: string; status: string; eventId?: string; limit: number }): Promise<RecentRegistrationsOut>;
+  topCreditSpenders(ctx: CallCtx, q: { from: string; to: string; limit: number }): Promise<TopSpendersOut>;
   contentStats(ctx: CallCtx, q: { from: string; to: string; topHashtags: number }): Promise<ContentStatsOut>;
   flaggedContent(ctx: CallCtx, q: { source: 'AI' | 'REPORTS' | 'ALL'; limit: number }): Promise<FlaggedContentOut>;
   failedSagas(ctx: CallCtx, q: { status?: 'FAILED' | 'COMPENSATED'; since?: string; limit: number }): Promise<FailedSagasOut>;

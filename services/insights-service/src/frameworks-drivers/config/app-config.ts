@@ -39,6 +39,10 @@ export interface AppConfig {
   anthropicApiKey: string | undefined;
   llmModel: string;
   llmModelCheap: string;
+  /** `stub`: provider errors fall back to the deterministic generator. Default `none` (claude) / `stub` (ollama). */
+  llmFallback: 'stub' | 'none';
+  llmFallbackExplicit: boolean;
+  ollamaTimeoutMs: number;
   ollamaUrl: string;
   ollamaModel: string;
   llmPriceInPerM: number;
@@ -129,10 +133,13 @@ export function loadConfig(env: Env = process.env): AppConfig {
     prometheusUrl: env.PROMETHEUS_URL || undefined,
     llmProvider: oneOf(env.LLM_PROVIDER, ['stub', 'claude', 'ollama'] as const, 'stub', 'LLM_PROVIDER'),
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
-    llmModel: env.LLM_MODEL ?? 'claude-sonnet-5-5',
-    llmModelCheap: env.LLM_MODEL_CHEAP ?? 'claude-haiku-5-5',
+    llmModel: env.LLM_MODEL ?? env.ANTHROPIC_MODEL ?? 'claude-haiku-5-5',
+    llmModelCheap: env.LLM_MODEL_CHEAP ?? env.ANTHROPIC_MODEL ?? 'claude-haiku-5-5',
+    llmFallback: oneOf(env.LLM_FALLBACK, ['stub', 'none'] as const, 'none', 'LLM_FALLBACK'),
+    llmFallbackExplicit: Boolean(env.LLM_FALLBACK),
+    ollamaTimeoutMs: num(env.OLLAMA_TIMEOUT_MS, 120_000),
     ollamaUrl: env.OLLAMA_URL ?? 'http://localhost:11434',
-    ollamaModel: env.OLLAMA_MODEL ?? 'llama3.2',
+    ollamaModel: env.OLLAMA_MODEL ?? 'qwen2.5:3b',
     llmPriceInPerM: num(env.LLM_PRICE_IN_PER_M, 2),
     llmPriceOutPerM: num(env.LLM_PRICE_OUT_PER_M, 10),
     ttsProvider: oneOf(env.TTS_PROVIDER, ['none', 'piper', 'polly'] as const, 'none', 'TTS_PROVIDER'),

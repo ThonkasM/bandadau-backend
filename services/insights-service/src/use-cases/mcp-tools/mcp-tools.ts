@@ -29,7 +29,7 @@ const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
 
 export const isServicePrincipal = (p: ToolPrincipal) => p.type === 'service';
 
-/** Use cases behind the 12 MCP tools of `bandadau-docs/contracts/mcp/tools.md`. Handlers return structured output (contract `outputSchema`). */
+/** Use cases behind the 14 MCP tools of `bandadau-docs/contracts/mcp/tools.md`. Handlers return structured output (contract `outputSchema`). */
 export class McpToolService {
   readonly handlers: Record<string, ToolHandler>;
 
@@ -60,6 +60,22 @@ export class McpToolService {
       get_credit_stats: (a, c) => {
         validateRange(str(a.from, ''), str(a.to, ''));
         return this.data.creditStats(call(c), { from: str(a.from, ''), to: str(a.to, ''), groupBy: str(a.groupBy, 'day') as 'day' | 'week' | 'month' });
+      },
+      list_recent_registrations: (a, c) => {
+        const from = typeof a.from === 'string' ? a.from : undefined;
+        const to = typeof a.to === 'string' ? a.to : undefined;
+        if (from && to) validateRange(from, to);
+        return this.data.listRecentRegistrations(call(c), {
+          from,
+          to,
+          status: str(a.status, 'CONFIRMED'),
+          eventId: typeof a.eventId === 'string' ? a.eventId : undefined,
+          limit: Math.min(50, Math.max(1, num(a.limit, 10))),
+        });
+      },
+      get_top_credit_spenders: (a, c) => {
+        validateRange(str(a.from, ''), str(a.to, ''));
+        return this.data.topCreditSpenders(call(c), { from: str(a.from, ''), to: str(a.to, ''), limit: Math.min(20, Math.max(1, num(a.limit, 5))) });
       },
       get_content_stats: (a, c) => {
         validateRange(str(a.from, ''), str(a.to, ''));

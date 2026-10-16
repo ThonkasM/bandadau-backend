@@ -7,6 +7,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 
+import { maskDisplayNamesInJson } from '../../../src/entities/policies/number-fidelity';
 import { MCP_TOOLS,McpServerFactory } from '../../../src/interface-adapters/controllers/mcp/mcp-server.factory';
 import { StatAnomalyDetector } from '../../../src/interface-adapters/gateways/anomaly/stat-anomaly.detector';
 import { PlatformDataGateway } from '../../../src/interface-adapters/gateways/internal-api/platform-data.gateway';
@@ -29,6 +30,16 @@ const upstream: Record<string, (url: URL) => Response> = {
       ? { from: '2026-09-01', to: '2026-10-31', groupBy: 'event', totals: { pending: 0, confirmed: 7, failed: 3, cancelled: 0, creditsCollected: 60, creditsRefunded: 0 }, series: [{ key: '01a13f35-f40e-71eb-80b9-340373caf45e', label: 'Smoke caos', pending: 0, confirmed: 0, failed: 1, cancelled: 0 }] }
       : { from: '2026-09-01', to: '2026-10-31', groupBy: 'day', totals: { pending: 0, confirmed: 7, failed: 3, cancelled: 0, creditsCollected: 60, creditsRefunded: 0 }, series: [{ key: '2026-10-15', label: '2026-10-15', pending: 0, confirmed: 7, failed: 3, cancelled: 0 }] }),
   'events-service/internal/v1/events': () => json({ items: [{ id: '01a13f35-f40e-71eb-80b9-340373caf45e', organizerId: 'o', title: 'Taller', startsAt: '2026-10-20T10:00:00Z', venue: 'Aula', capacity: 5, seatsTaken: 1, seatsAvailable: 4, priceCredits: 0, status: 'PUBLISHED' }], nextCursor: 'more' }),
+  'events-service/internal/v1/registrations': (u) =>
+    json({
+      items: [
+        { id: '0192f3c1-2d3e-7f40-a152-637485960a1b', eventId: '0192f3b0-7c1e-7a2b-9c3d-4e5f60718293', userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', event: { id: '0192f3b0-7c1e-7a2b-9c3d-4e5f60718293', title: 'Taller de React Native', startsAt: '2026-10-24T22:00:00Z', endsAt: '2026-10-25T00:00:00Z', venue: 'Aula' }, status: u.searchParams.get('status') ?? 'CONFIRMED', failureReason: null, priceCredits: 25, ticketId: null, createdAt: '2026-10-16T01:10:00Z', updatedAt: '2026-10-16T01:10:02Z', confirmedAt: '2026-10-16T01:10:02Z', cancelledAt: null },
+        { id: '0192f3c1-2d3e-7f40-a152-637485960a1c', eventId: '0192f3b0-7c1e-7a2b-9c3d-4e5f60718293', userId: '0192f1a2-0000-7d5e-8f60-000000000000', event: { id: '0192f3b0-7c1e-7a2b-9c3d-4e5f60718293', title: 'Taller de React Native', startsAt: '2026-10-24T22:00:00Z', endsAt: '2026-10-25T00:00:00Z', venue: 'Aula' }, status: 'CONFIRMED', failureReason: null, priceCredits: 20, ticketId: '0192f3c2-9a8b-7c6d-8e5f-4a3b2c1d0e9f', createdAt: '2026-10-15T10:00:00Z', updatedAt: '2026-10-15T10:00:02Z', confirmedAt: '2026-10-15T10:00:02Z', cancelledAt: null },
+      ],
+      nextCursor: 'more',
+    }),
+  'wallet-service/internal/v1/stats/top-spenders': () => json({ from: '2026-10-10', to: '2026-10-16', items: [{ userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', creditsSpent: 45, registrations: 2 }] }),
+  'social-service/internal/v1/profiles': () => json({ items: [{ userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', displayName: 'Diego Flores' }] }),
   'events-service/internal/v1/sagas': () => json({ items: [{ id: '00000000-0000-7000-8000-000000000005', type: 'REGISTRATION', registrationId: '00000000-0000-7000-8000-000000000006', eventId: '01a13f35-f40e-71eb-80b9-340373caf45e', userId: '00000000-0000-7000-8000-000000000003', step: 'RELEASE_SEAT', status: 'COMPENSATED', failureReason: 'TICKET_ISSUE_FAILED', updatedAt: '2026-10-15T10:57:51Z' }], nextCursor: null }),
   'wallet-service/internal/v1/stats/credits': () => json({ from: '2026-09-01', to: '2026-10-31', groupBy: 'day', totals: { topUpCount: 7, topUpCredits: 400, debitCount: 6, debitCredits: 120, refundCount: 3, refundCredits: 60, netCredits: 340, circulatingCredits: 340 }, series: [{ date: '2026-09-01', topUpCredits: 0, debitCredits: 0, refundCredits: 0 }] }),
   'social-service/internal/v1/stats/daily': () => json({ from: '2026-10-01', to: '2026-10-31', days: [{ date: '2026-10-01', postsCreated: 2, commentsCreated: 1, reactionsSet: 3, followsCreated: 0, activeAuthors: 2, postsHidden: 0 }], topHashtags: [{ hashtag: 'bandada', count: 3 }] }),
@@ -86,12 +97,12 @@ describe('MCP contract (bandadau-docs/contracts/mcp)', () => {
     expect(JSON.parse(bundled)).toEqual(JSON.parse(readFileSync(docs, 'utf8')));
   });
 
-  it('exposes the 12 contract tools (service) / 11 without raise_alert (admin) with contract names, schemas and annotations', async () => {
+  it('exposes the 14 contract tools (service) / 13 without raise_alert (admin) with contract names, schemas and annotations', async () => {
     const { factory } = serverFactory();
     const svc = await connect(factory, principal({ sub: 'insights-service', typ: 'service', roles: [], aud: ['bandada-internal'] }));
     const all = (await svc.client.listTools()).tools;
     expect(all.map((t) => t.name).sort()).toEqual(MCP_TOOLS.map((t) => t.name).sort());
-    expect(all).toHaveLength(12);
+    expect(all).toHaveLength(14);
     for (const t of MCP_TOOLS) {
       const got = all.find((x) => x.name === t.name)!;
       expect(got.inputSchema).toEqual(t.inputSchema);
@@ -101,7 +112,7 @@ describe('MCP contract (bandadau-docs/contracts/mcp)', () => {
     await svc.close();
     const adm = await connect(factory, principal({}));
     expect((await adm.client.listTools()).tools.map((t) => t.name)).not.toContain('raise_alert');
-    expect((await adm.client.listTools()).tools).toHaveLength(11);
+    expect((await adm.client.listTools()).tools).toHaveLength(13);
     await adm.close();
   });
 
@@ -128,6 +139,8 @@ describe('MCP contract (bandadau-docs/contracts/mcp)', () => {
       ['get_registration_stats', { from: '2026-09-01', to: '2026-10-31', groupBy: 'status' }],
       ['list_events', { from: '2026-10-01T00:00:00Z', to: '2026-11-01T00:00:00Z', limit: 1 }],
       ['get_credit_stats', { from: '2026-09-01', to: '2026-10-31' }],
+      ['list_recent_registrations', { limit: 2 }],
+      ['get_top_credit_spenders', { from: '2026-10-10', to: '2026-10-16', limit: 3 }],
       ['get_content_stats', { from: '2026-10-01', to: '2026-10-31' }],
       ['list_flagged_content', {}],
       ['list_failed_sagas', {}],
@@ -232,6 +245,39 @@ describe('PlatformDataGateway', () => {
     await g.creditStats({ actorId: 'system:monitoring-agent' }, { from: '2026-09-01', to: '2026-10-31', groupBy: 'day' });
     await g.creditStats({ actorId: '01a13db2-c507-7f39-abfa-4388854ecb66' }, { from: '2026-09-01', to: '2026-10-31', groupBy: 'day' });
     expect(seen.map((s) => s.actor)).toEqual(['', '01a13db2-c507-7f39-abfa-4388854ecb66']);
+  });
+});
+
+describe('buyer tools (displayName only)', () => {
+  it('list_recent_registrations joins display names in one batch, leaves null when the profile is missing and never exposes email/phone', async () => {
+    const r = await gateway().listRecentRegistrations({}, { status: 'CONFIRMED', limit: 2 });
+    expect(r.truncated).toBe(true);
+    expect(r.items[0]).toEqual({
+      registrationId: '0192f3c1-2d3e-7f40-a152-637485960a1b',
+      ticketId: null,
+      event: { id: '0192f3b0-7c1e-7a2b-9c3d-4e5f60718293', title: 'Taller de React Native' },
+      buyer: { userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', displayName: 'Diego Flores' },
+      creditsPaid: 25,
+      status: 'CONFIRMED',
+      confirmedAt: '2026-10-16T01:10:02Z',
+    });
+    expect(r.items[1]?.buyer.displayName).toBeNull();
+    expect(JSON.stringify(r)).not.toMatch(/email|phone|tel[eé]fono|correo/i);
+  });
+  it('degrades to null names when social-service is down (the data is still returned)', async () => {
+    const g = new PlatformDataGateway({
+      services: { 'events-service': 'http://events:1', 'wallet-service': 'http://wallet:1', 'social-service': 'http://social:1' },
+      tokens: { authHeaders: async () => ({}), invalidate: () => undefined },
+      rabbit: { url: 'http://rabbit:1', user: 'u', password: 'p' },
+      fetch: (async (i: URL | string) => (String(i).startsWith('http://social') ? new Response('boom', { status: 503 }) : fakeFetch(i))) as unknown as typeof fetch,
+    });
+    const t = await g.topCreditSpenders({}, { from: '2026-10-10', to: '2026-10-16', limit: 5 });
+    expect(t.items).toEqual([{ userId: '0192f1a2-3b4c-7d5e-8f60-718293a4b5c6', displayName: null, creditsSpent: 45, registrations: 2 }]);
+  });
+  it('masks display names in the audit/log summaries of tool outputs but keeps the rest', () => {
+    expect(maskDisplayNamesInJson('{"buyer":{"userId":"u","displayName":"Diego Flores"},"creditsPaid":25}')).toBe('{"buyer":{"userId":"u","displayName":"Diego F."},"creditsPaid":25}');
+    expect(maskDisplayNamesInJson('{"displayName":"Ana María de la Vega"}')).toBe('{"displayName":"Ana V."}');
+    expect(maskDisplayNamesInJson('{"displayName":"Cher"}')).toBe('{"displayName":"C."}');
   });
 });
 

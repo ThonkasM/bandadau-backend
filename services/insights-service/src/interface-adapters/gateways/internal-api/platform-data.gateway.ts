@@ -8,8 +8,10 @@ import type {
   ListEventsOut,
   PlatformDataPort,
   QueryMetricsOut,
+  RecentRegistrationsOut,
   RegistrationStatsOut,
   ServiceHealthOut,
+  TopSpendersOut,
 } from '../../../use-cases/ports/platform-data.port';
 import { type AuthHeaders, collectPages, collectPagesInfo, JsonClient, type Paged } from './http-json';
 
@@ -39,6 +41,15 @@ interface EventDto {
   seatsTaken: number;
   priceCredits: number;
   status: string;
+}
+interface RegistrationDto {
+  id: string;
+  userId: string;
+  event: { id: string; title: string };
+  status: string;
+  priceCredits: number;
+  ticketId: string | null;
+  confirmedAt: string | null;
 }
 interface SagaDto {
   id: string;
@@ -111,6 +122,47 @@ export class PlatformDataGateway implements PlatformDataPort {
       q.limit,
     );
     return { truncated, items: items.map((e) => ({ eventId: e.id, title: e.title, startsAt: e.startsAt, venue: e.venue, capacity: e.capacity, seatsTaken: e.seatsTaken, priceCredits: e.priceCredits, status: e.status })) };
+  }
+
+  async listRecentRegistrations(ctx: CallCtx, q: { from?: string; to?: string; status: string; eventId?: string; limit: number }): Promise<RecentRegistrationsOut> {
+    const page = await this.client('events-service').get<Paged<RegistrationDto>>('/internal/v1/registrations', { from: q.from, to: q.to, status: q.status, eventId: q.eventId, limit: Math.min(PAGE, q.limit) }, this.actor(ctx));
+    const names = await this.displayNames(ctx, page.items.map((r) => r.userId));
+    return {
+      truncated: Boolean(page.nextCursor),
+      items: page.items.map((r) => ({
+        registrationId: r.id,
+        ticketId: r.ticketId ?? null,
+        event: { id: r.event.id, title: r.event.title },
+        buyer: { userId: r.userId, displayName: names.get(r.userId) ?? null },
+        creditsPaid: r.priceCredits,
+        status: r.status,
+        confirmedAt: r.confirmedAt ?? null,
+      })),
+    };
+  }
+
+  async topCreditSpenders(ctx: CallCtx, q: { from: string; to: string; limit: number }): Promise<TopSpendersOut> {
+    const raw = await this.client('wallet-service').get<{ from: string; to: string; items: { userId: string; creditsSpent: number; registrations: number }[] }>(
+      '/internal/v1/stats/top-spenders',
+      { from: q.from, to: q.to, limit: Math.min(20, q.limit) },
+      this.actor(ctx),
+    );
+    const names = await this.displayNames(ctx, raw.items.map((i) => i.userId));
+    return { from: raw.from, to: raw.to, items: raw.items.map((i) => ({ userId: i.userId, displayName: names.get(i.userId) ?? null, creditsSpent: i.creditsSpent, registrations: i.registrations })) };
+  }
+
+  /** Display names only (never email/phone) from social-service in one batch; a failure degrades to `null` names, the data is still useful. */
+  private async displayNames(ctx: CallCtx, userIds: string[]): Promise<Map<string, string>> {
+    const ids = [...new Set(userIds)];
+    const out = new Map<string, string>();
+    if (ids.length === 0) return out;
+    try {
+      const res = await this.client('social-service').get<{ items: { userId: string; displayName: string }[] }>('/internal/v1/profiles', { ids: ids.join(',') }, this.actor(ctx));
+      for (const p of res.items) out.set(p.userId, p.displayName);
+    } catch {
+      /* names are best effort */
+    }
+    return out;
   }
 
   creditStats(ctx: CallCtx, q: { from: string; to: string; groupBy: 'day' | 'week' | 'month' }): Promise<CreditStatsOut> {

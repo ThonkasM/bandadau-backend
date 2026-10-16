@@ -52,7 +52,7 @@ export class OllamaAdapter implements LlmPort {
     const msg = json.message ?? { role: 'assistant' as const, content: '' };
     const content: LlmBlock[] = [];
     if (msg.content) content.push({ type: 'text', text: msg.content });
-    for (const call of msg.tool_calls ?? []) content.push({ type: 'tool_use', id: `call_${++this.seq}`, name: call.function.name, input: call.function.arguments ?? {} });
+    for (const call of msg.tool_calls ?? []) content.push({ type: 'tool_use', id: `call_${++this.seq}`, name: call.function.name, input: normalizeArgs(call.function.arguments) });
     const usedTools = content.some((b) => b.type === 'tool_use');
     return {
       stopReason: usedTools ? 'tool_use' : json.done_reason === 'length' ? 'max_tokens' : 'end_turn',
@@ -73,4 +73,18 @@ function toOllama(m: LlmMessage): OllamaMessage[] {
   const text = textOf(m.content);
   if (text) out.push({ role: 'user', content: text });
   return out;
+}
+
+/** Small models sometimes return the arguments as a JSON string (or nothing): normalize to an object. */
+function normalizeArgs(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  if (typeof raw === 'string') {
+    try {
+      const v: unknown = JSON.parse(raw);
+      if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+    } catch {
+      /* malformed: no arguments; the tool schema validation reports it to the model */
+    }
+  }
+  return {};
 }

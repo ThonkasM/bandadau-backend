@@ -94,8 +94,8 @@ describe('REST: reports (UC-19)', () => {
       return x.body.status === 'READY' ? x : undefined;
     });
     expect(report.headers['content-language']).toBe('en');
-    expect(report.body.markdown).toContain('## Platform summary');
-    expect(report.body.markdown).toContain('11 confirmed');
+    expect(report.body.markdown.split('\n')[0]).toMatch(/^Between \d{4}-\d{2}-\d{2} and \d{4}-\d{2}-\d{2}, 11 registrations were confirmed/); // direct answer first
+    expect(report.body.markdown).toContain('## Details');
     expect(report.body.markdown).toContain('## Limitations');
     h.s3KeysToClean.push(`reports/${r.body.reportId}/summary.en.mp3`);
   });
@@ -214,7 +214,7 @@ describe('MCP over HTTP (Streamable HTTP, stateless) with the official SDK clien
     expect(client.getServerVersion()).toMatchObject({ name: 'bandada-insights' });
     expect(client.getServerCapabilities()).toMatchObject({ tools: {}, resources: {}, prompts: {} });
     const tools = (await client.listTools()).tools.map((t) => t.name);
-    expect(tools).toHaveLength(11);
+    expect(tools).toHaveLength(13);
     expect(tools).not.toContain('raise_alert');
     const res = await client.callTool({ name: 'get_platform_kpis', arguments: { from: '2026-10-01', to: '2026-10-15' } });
     expect(res.isError).toBeUndefined();
@@ -233,7 +233,7 @@ describe('MCP over HTTP (Streamable HTTP, stateless) with the official SDK clien
   it('a service token sees raise_alert and can call it; n8n is rejected; students and app-audience tokens are refused', async () => {
     const svcClient = await connect(await h.serviceToken());
     const tools = (await svcClient.listTools()).tools.map((t) => t.name);
-    expect(tools).toHaveLength(12);
+    expect(tools).toHaveLength(14);
     const out = await svcClient.callTool({ name: 'raise_alert', arguments: { severity: 'INFO', kind: 'METRIC_ANOMALY', message: 'Prueba MCP', dedupeKey: 'METRIC_ANOMALY:it-test' } });
     expect(out.structuredContent).toMatchObject({ created: true, status: 'OPEN' });
     await svcClient.close();

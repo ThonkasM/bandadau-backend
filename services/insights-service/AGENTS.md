@@ -45,11 +45,13 @@ src/
 
 ## Estado de implementación (fase 2)
 
-Implementado y verificado: REST (público + `/internal/v1`), servidor MCP con las 12 herramientas, 2 recursos y 2 prompts,
+Implementado y verificado: REST (público + `/internal/v1`), servidor MCP con las 14 herramientas (incl. `list_recent_registrations` y `get_top_credit_spenders`, que devuelven `displayName` del comprador; enmascarado en `AgentRun.steps`/logs vía `maskDisplayNamesInJson`), 2 recursos y 2 prompts,
 ReportAgent, MonitoringAgent, proyección `insights-service.analytics`, outbox, Dockerfile, compose y smoke.
 
 - Agentes = clientes MCP por **HTTP loopback** (`MCP_INTERNAL_URL`) con token de servicio.
-- `LlmPort`: `stub` (por defecto, determinista), `claude`, `ollama`. `TtsPort`: `none` (por defecto), `piper`, `polly`.
+- `LlmPort`: `stub` (por defecto, determinista), `claude` (modelo por defecto `claude-haiku-5-5`, `ANTHROPIC_MODEL`), `ollama`.
+  - Planificador determinista (`gateways/llm/stub-intents.ts`: intención + rango es/en; «hoy», «ayer», «esta semana», «último»…) y reporte que RESPONDE en la **primera línea del markdown** («Hoy se gastaron 815 créditos en inscripciones.»); preguntas abiertas → resumen `## …`.
+  - `ollama` = `OllamaHybridAdapter`: el código elige herramientas y fechas; solo si la pregunta es abierta se pide un plan a Ollama (`format` JSON-schema) y se VALIDA (herramienta permitida, fechas reales, from ≤ to, ≤ 366 días); el modelo redacta la respuesta directa y el código verifica cifras y nombres contra los datos (si no cuadra, redacción determinista). `AgentRun.model` indica quién redactó (`qwen2.5:3b`, `qwen2.5:3b+stub-fallback`, `stub-deterministic-1`). Variables: `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_MS` (120000), `LLM_FALLBACK=stub|none` (ollama: `stub` por defecto; claude: `none`). `TtsPort`: `none` (por defecto), `piper`, `polly`.
 - Estructura real: `src/{entities,use-cases,interface-adapters,frameworks-drivers}`; prompts en `frameworks-drivers/prompts/prompts.ts`.
 - Datos: `REPORT#`, `AGENTRUN#` (+`STEP#`, TTL 30 d), `ALERT#`, `METRIC#<name>/<fecha>`, `LOCK#`, `OUTBOX#`; GSI1 (`REPORT`, `AGENTRUN`, `ALERT#<status>`).
 

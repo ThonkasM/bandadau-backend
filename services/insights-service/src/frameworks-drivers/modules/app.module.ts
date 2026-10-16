@@ -21,7 +21,9 @@ import { DynamoAgentRunRepository, DynamoAlertRepository, DynamoLock, DynamoMetr
 import { DynamoStore } from '../../interface-adapters/gateways/dynamo/dynamo-store';
 import { PlatformDataGateway } from '../../interface-adapters/gateways/internal-api/platform-data.gateway';
 import { AnthropicAdapter } from '../../interface-adapters/gateways/llm/anthropic.adapter';
+import { FallbackLlmAdapter } from '../../interface-adapters/gateways/llm/fallback.adapter';
 import { OllamaAdapter } from '../../interface-adapters/gateways/llm/ollama.adapter';
+import { OllamaHybridAdapter } from '../../interface-adapters/gateways/llm/ollama-hybrid.adapter';
 import { StubLlmAdapter } from '../../interface-adapters/gateways/llm/stub.adapter';
 import { LoopbackMcpClientFactory } from '../../interface-adapters/gateways/mcp/loopback-mcp-client';
 import { S3AudioStorage } from '../../interface-adapters/gateways/s3/s3-audio.storage';
@@ -71,10 +73,13 @@ const MONITOR_RUN_STALE_MS = 3 * 60_000;
 export function buildLlm(config: AppConfig, logger: AppLogger): { llm: LlmPort; pricing: LlmPricing } {
   if (config.llmProvider === 'claude') {
     const adapter = new AnthropicAdapter({ apiKey: config.anthropicApiKey, model: config.llmModel, modelCheap: config.llmModelCheap });
-    if (adapter.enabled) return { llm: adapter, pricing: { inPerM: config.llmPriceInPerM, outPerM: config.llmPriceOutPerM } };
+    if (adapter.enabled) return { llm: config.llmFallback === 'stub' ? new FallbackLlmAdapter(adapter, new StubLlmAdapter()) : adapter, pricing: { inPerM: config.llmPriceInPerM, outPerM: config.llmPriceOutPerM } };
     logger.warn('LLM_PROVIDER=claude but ANTHROPIC_API_KEY is not set: Anthropic adapter disabled, using the deterministic stub');
   } else if (config.llmProvider === 'ollama') {
-    return { llm: new OllamaAdapter({ url: config.ollamaUrl, model: config.ollamaModel }), pricing: { inPerM: 0, outPerM: 0 } };
+    const ollama = new OllamaAdapter({ url: config.ollamaUrl, model: config.ollamaModel, timeoutMs: config.ollamaTimeoutMs });
+    // small local model: deterministic planner + verified answer wording (ollama-hybrid.adapter.ts); fallback `stub` unless LLM_FALLBACK=none
+    const fallback = config.llmFallbackExplicit ? config.llmFallback : 'stub';
+    return { llm: new OllamaHybridAdapter({ ollama, fallback, model: config.ollamaModel }), pricing: { inPerM: 0, outPerM: 0 } };
   }
   return { llm: new StubLlmAdapter(), pricing: { inPerM: 0, outPerM: 0 } };
 }

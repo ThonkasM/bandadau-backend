@@ -17,6 +17,7 @@ import addFormats from 'ajv-formats';
 
 import { type AgentRun, newAgentRun } from '../../../entities/agent-run';
 import { DomainError } from '../../../entities/errors/domain-errors';
+import { maskDisplayNamesInJson } from '../../../entities/policies/number-fidelity';
 import { isServicePrincipal, type McpToolService, type ToolContext } from '../../../use-cases/mcp-tools/mcp-tools';
 import type { RateLimiter } from '../../../use-cases/mcp-tools/rate-limiter';
 import type { GetPlatformKpisUseCase } from '../../../use-cases/metrics/metrics';
@@ -164,7 +165,7 @@ export class McpServerFactory {
             kind: 'TOOL_CALL',
             toolName: name,
             input: redact(name, args),
-            outputSummary: result.text.slice(0, 500),
+            outputSummary: maskDisplayNamesInJson(result.text).slice(0, 500),
             isError: result.isError,
             startedAt: started.toISOString(),
             durationMs: finished.getTime() - started.getTime(),

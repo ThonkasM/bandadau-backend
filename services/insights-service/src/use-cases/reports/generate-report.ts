@@ -19,9 +19,11 @@ export const REPORT_AGENT_TOOLS = [
   'get_platform_kpis',
   'get_registration_stats',
   'get_service_health',
+  'get_top_credit_spenders',
   'list_events',
   'list_failed_sagas',
   'list_flagged_content',
+  'list_recent_registrations',
 ] as const;
 
 export interface ReportAgentOptions {

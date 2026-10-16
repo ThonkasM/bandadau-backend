@@ -2,6 +2,7 @@ import { type AgentRun, type AgentRunStep } from '../../entities/agent-run';
 import { AgentStepLimitError, LlmRefusalError } from '../../entities/errors/domain-errors';
 import type { Locale } from '../../entities/locale';
 import { type AgentGuardrails, assertBudget, costMicros } from '../../entities/policies/agent-guardrails';
+import { maskDisplayNamesInJson } from '../../entities/policies/number-fidelity';
 import type { LlmBlock, LlmMessage, LlmPort, LlmPricing, LlmToolDef } from '../ports/llm.port';
 import type { McpClientPort } from '../ports/mcp-client.port';
 import type { Clock } from '../ports/misc';
@@ -132,7 +133,7 @@ export class AgentLoop {
       kind: 'TOOL_CALL',
       toolName: call.name,
       input: call.input,
-      outputSummary: content.slice(0, SUMMARY_MAX),
+      outputSummary: maskDisplayNamesInJson(content).slice(0, SUMMARY_MAX),
       isError,
       startedAt: t0.toISOString(),
       durationMs: this.clock.now().getTime() - t0.getTime(),

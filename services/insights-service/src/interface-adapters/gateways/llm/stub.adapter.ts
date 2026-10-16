@@ -1,59 +1,70 @@
 import type { Locale } from '../../../entities/locale';
 import type { LlmBlock, LlmPort, LlmRequest, LlmResponse } from '../../../use-cases/ports/llm.port';
 import { textOf } from './common';
+import { buildDirectAnswer, detectIntent, parseRange } from './stub-intents';
 
 type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const MONTHS: Record<string, number> = {
-  enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
-  january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
-};
 const DAY = 86_400_000;
 const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const startOfDay = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 
-/** Date range of a question (es/en): named months, "last week", "last month", "N days", default last 30 days. */
+/** Date range of a question (es/en): named months, "today", "this week", "last week/month", "N days", default last 30 days. */
 export function inferRange(question: string, today: string): { from: string; to: string } {
+  return parseRange(question, today) ?? { from: ymd(startOfDay(today) - 29 * DAY), to: today };
+}
+
+const CATEGORY_RE = {
+  events: /inscri|registr|event|ticket|taller/,
+  credits: /cr[eé]dit|wallet|billetera|recarga|top.?up|gast|spen/,
+  content: /publica|post|contenido|content|hashtag|engagement|social|coment|reacci/,
+  moderation: /moderaci|moderat|flag|denunc|report(ed|es de)|marcad/,
+  incidents: /saga|fall|fail|error|incident|compens/,
+  health: /salud|health|servicio|service|cola|queue|dlq|ca[ií]d|down|infra/,
+  anomalies: /anomal|inusual|unusual|pico|spike/,
+};
+function categories(question: string) {
   const q = question.toLowerCase();
-  const t = startOfDay(today);
-  const [ty, tm] = [Number(today.slice(0, 4)), Number(today.slice(5, 7))];
-  const named = Object.entries(MONTHS).filter(([name]) => new RegExp(`\\b${name}\\b`).test(q)).map(([, n]) => n);
-  if (named.length > 0) {
-    const bounds = named.map((m) => {
-      const y = m <= tm ? ty : ty - 1;
-      return { start: Date.UTC(y, m - 1, 1), end: Date.UTC(y, m, 0) };
-    });
-    const from = Math.min(...bounds.map((b) => b.start));
-    const to = Math.min(Math.max(...bounds.map((b) => b.end)), t);
-    return { from: ymd(from), to: ymd(to) };
+  return Object.fromEntries(Object.entries(CATEGORY_RE).map(([k, re]) => [k, re.test(q)])) as Record<keyof typeof CATEGORY_RE, boolean>;
+}
+/** True when the deterministic planner recognizes nothing concrete (no intent, no topic keyword): the question is open. */
+export function isGeneralQuestion(question: string): boolean {
+  return detectIntent(question) === null && !Object.values(categories(question)).some(Boolean);
+}
+
+/** Arguments of every tool for a date range (the planner's defaults). */
+export function toolInput(name: string, range: { from: string; to: string }, today: string): Obj | null {
+  switch (name) {
+    case 'get_platform_kpis': return { ...range };
+    case 'get_registration_stats': return { ...range, groupBy: 'day' };
+    case 'list_events': return { from: `${range.from}T00:00:00Z`, to: `${range.to}T23:59:59Z`, limit: 10 };
+    case 'get_credit_stats': return { ...range, groupBy: 'day' };
+    case 'get_content_stats': return { ...range, topHashtags: 5 };
+    case 'list_flagged_content': return { source: 'ALL', limit: 10 };
+    case 'list_failed_sagas': return { since: `${range.from}T00:00:00Z`, limit: 50 };
+    case 'get_service_health': return { includeQueues: true };
+    case 'detect_anomalies': return { metrics: ['registrationsConfirmed', 'registrationsFailed', 'posts', 'creditsSpent'], ...range, granularity: 'day', sensitivity: 0.6 };
+    case 'list_recent_registrations': return { status: 'CONFIRMED', limit: 10, from: range.from, to: range.to };
+    case 'get_top_credit_spenders': return { ...range, limit: 5 };
+    default: void today; return null;
   }
-  if (/\b(mes pasado|last month|previous month)\b/.test(q)) {
-    return { from: ymd(Date.UTC(ty, tm - 2, 1)), to: ymd(Date.UTC(ty, tm - 1, 0)) };
-  }
-  if (/\b(semana pasada|last week|previous week)\b/.test(q)) return { from: ymd(t - 7 * DAY), to: ymd(t - DAY) };
-  if (/\b(hoy|today)\b/.test(q)) return { from: today, to: today };
-  if (/\b(ayer|yesterday)\b/.test(q)) return { from: ymd(t - DAY), to: ymd(t - DAY) };
-  const n = /\b(\d{1,3})\s*(d[ií]as|days)\b/.exec(q);
-  if (n) return { from: ymd(t - (Number(n[1]) - 1) * DAY), to: today };
-  if (/\b(semana|week)\b/.test(q)) return { from: ymd(t - 6 * DAY), to: today };
-  if (/\b(a[ñn]o|year)\b/.test(q)) return { from: ymd(t - 364 * DAY), to: today };
-  return { from: ymd(t - 29 * DAY), to: today };
 }
 
 /** Which tools a question calls for (keywords es/en). */
-export function planTools(question: string, range: { from: string; to: string }, offered: Set<string>): { name: string; input: Obj }[] {
-  const q = question.toLowerCase();
-  const has = (re: RegExp) => re.test(q);
+export function planTools(question: string, range: { from: string; to: string }, offered: Set<string>, today: string = new Date().toISOString().slice(0, 10)): { name: string; input: Obj }[] {
+  const intent = detectIntent(question);
+  const explicit = parseRange(question, today);
+  const only = (name: string, input: Obj) => (offered.has(name) ? [{ name, input }] : []);
+  if (intent === 'LAST_BUYER' || intent === 'RECENT_BUYERS') {
+    return only('list_recent_registrations', { status: 'CONFIRMED', limit: intent === 'LAST_BUYER' ? 5 : 10, ...(explicit ? { from: explicit.from, to: explicit.to } : {}) });
+  }
+  if (intent === 'TOP_SPENDERS') return only('get_top_credit_spenders', { ...range, limit: 5 });
+  if (intent === 'TOP_EVENT') return only('list_events', { from: `${ymd(startOfDay(today) - 365 * DAY)}T00:00:00Z`, to: `${ymd(startOfDay(today) + 365 * DAY)}T23:59:59Z`, limit: 50 });
+  if (intent === 'NEW_USERS') return only('get_platform_kpis', range);
   const plan: { name: string; input: Obj }[] = [];
   const add = (name: string, input: Obj) => offered.has(name) && plan.push({ name, input });
-  const events = has(/inscri|registr|event|ticket|taller/);
-  const credits = has(/cr[eé]dit|wallet|billetera|recarga|top.?up|gast|spen/);
-  const content = has(/publica|post|contenido|content|hashtag|engagement|social|coment|reacci/);
-  const moderation = has(/moderaci|moderat|flag|denunc|report(ed|es de)|marcad/);
-  const incidents = has(/saga|fall|fail|error|incident|compens/);
-  const health = has(/salud|health|servicio|service|cola|queue|dlq|ca[ií]d|down|infra/);
-  const anomalies = has(/anomal|inusual|unusual|pico|spike/);
-  const general = !(events || credits || content || moderation || incidents || health || anomalies);
+  const { events, credits, content, moderation, incidents, health, anomalies } = categories(question);
+  const general = isGeneralQuestion(question);
   add('get_platform_kpis', range);
   if (events || general) add('get_registration_stats', { ...range, groupBy: 'day' });
   if (events) add('list_events', { from: `${range.from}T00:00:00Z`, to: `${range.to}T23:59:59Z`, limit: 10 });
@@ -66,7 +77,7 @@ export function planTools(question: string, range: { from: string; to: string },
   return plan;
 }
 
-function toolData(messages: LlmRequest['messages']): Record<string, Obj> {
+export function toolData(messages: LlmRequest['messages']): Record<string, Obj> {
   const out: Record<string, Obj> = {};
   for (const m of messages) {
     for (const b of m.content) {
@@ -99,6 +110,7 @@ const L = {
     dlq: (q: string) => `**Colas con mensajes en dead letters**: ${q}.`,
     anomalies: (a: string) => `**Anomalías detectadas**: ${a}.`,
     limits: 'Limitaciones',
+    limitsNames: 'Las cifras y los nombres provienen de las herramientas de datos de la plataforma. Los nombres para mostrar de los compradores solo son visibles para administradores; nunca se incluyen correos ni teléfonos. Este reporte se redactó con el generador determinista (sin modelo de lenguaje), por lo que no interpreta causas.',
     limitsText: 'Las cifras provienen de las herramientas de datos agregados de la plataforma; no incluyen datos personales. Este reporte se redactó con el generador determinista (sin modelo de lenguaje), por lo que no interpreta causas.',
     noData: 'No hay datos disponibles en el rango consultado.',
     cols: { date: 'Fecha', confirmed: 'Inscripciones confirmadas', failed: 'Inscripciones fallidas', cancelled: 'Inscripciones canceladas', posts: 'Publicaciones', creditsSpent: 'Créditos gastados', active: 'Usuarios activos', metric: 'Métrica', value: 'Valor' },
@@ -120,6 +132,7 @@ const L = {
     dlq: (q: string) => `**Queues with dead-lettered messages**: ${q}.`,
     anomalies: (a: string) => `**Anomalies detected**: ${a}.`,
     limits: 'Limitations',
+    limitsNames: 'Figures and names come from the platform data tools. Buyers\' display names are only visible to administrators; emails and phone numbers are never included. This report was written by the deterministic generator (no language model), so it does not interpret causes.',
     limitsText: 'Figures come from the platform aggregate-data tools and contain no personal data. This report was written by the deterministic generator (no language model), so it does not interpret causes.',
     noData: 'No data is available for the requested range.',
     cols: { date: 'Date', confirmed: 'Confirmed registrations', failed: 'Failed registrations', cancelled: 'Cancelled registrations', posts: 'Posts', creditsSpent: 'Credits spent', active: 'Active users', metric: 'Metric', value: 'Value' },
@@ -131,7 +144,7 @@ const L = {
 const safeTag = (s: string) => `#${String(s).replace(/[^\p{L}\p{N}_]/gu, '').slice(0, 30)}`;
 const safeText = (s: string) => String(s).replace(/[*_`#<>[\]]/g, '').slice(0, 60);
 
-export function composeFromData(locale: Locale, data: Record<string, Obj>) {
+export function composeFromData(locale: Locale, data: Record<string, Obj>, ctx: { question?: string; today?: string } = {}) {
   const t = L[locale];
   const kpis = data.get_platform_kpis;
   const regs = data.get_registration_stats;
@@ -192,6 +205,29 @@ export function composeFromData(locale: Locale, data: Record<string, Obj>) {
     chart = { type: 'table' };
   }
 
+  const intent = ctx.question ? detectIntent(ctx.question) : null;
+  const direct = intent ? buildDirectAnswer(locale, intent, ctx.question ?? '', ctx.today ?? new Date().toISOString().slice(0, 10), data) : null;
+  if (direct?.dataset) {
+    dataset = direct.dataset;
+    chart = direct.chart ?? { type: 'table' };
+  }
+  if (direct) {
+    const title = locale === 'es' ? 'Respuesta de Bandada U' : 'Bandada U answer';
+    const detail = direct.bullets.length > 0 ? direct.bullets : bullets;
+    const markdown = [
+      direct.answer,
+      '',
+      `## ${locale === 'es' ? 'Detalle' : 'Details'}`,
+      '',
+      ...detail.map((b) => `- ${b}`),
+      '',
+      `## ${t.limits}`,
+      '',
+      direct.usesNames ? t.limitsNames : t.limitsText,
+    ].join('\n');
+    return { title, markdown, dataset, chartIntent: chart };
+  }
+
   const title = from && to ? t.title(from, to) : locale === 'es' ? 'Reporte de la plataforma' : 'Platform report';
   const markdown = [
     `## ${title}`,
@@ -240,13 +276,13 @@ export class StubLlmAdapter implements LlmPort {
         const today = req.meta?.today ?? new Date().toISOString().slice(0, 10);
         const range = inferRange(req.meta?.question ?? '', today);
         const offered = new Set((req.tools ?? []).map((t) => t.name));
-        const plan = planTools(req.meta?.question ?? '', range, offered);
+        const plan = planTools(req.meta?.question ?? '', range, offered, today);
         if (plan.length === 0) return respond([{ type: 'text', text: req.locale === 'es' ? 'No hay herramientas aplicables.' : 'No applicable tools.' }], 'end_turn');
         return respond(plan.map((p, i) => ({ type: 'tool_use' as const, id: `stub_${i + 1}`, name: p.name, input: p.input })), 'tool_use');
       }
       case 'compose':
       case 'correct':
-        return respond([{ type: 'text', text: JSON.stringify(composeFromData(req.locale, toolData(req.messages))) }], 'end_turn');
+        return respond([{ type: 'text', text: JSON.stringify(composeFromData(req.locale, toolData(req.messages), { question: req.meta?.question, today: req.meta?.today })) }], 'end_turn');
       case 'audio_script': {
         const md = textOf(req.messages.flatMap((m) => m.content));
         const body = md
