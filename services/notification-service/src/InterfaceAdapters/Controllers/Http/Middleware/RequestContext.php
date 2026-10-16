@@ -7,10 +7,13 @@ namespace Bandada\Notification\InterfaceAdapters\Controllers\Http\Middleware;
 use Bandada\Notification\InterfaceAdapters\Controllers\Http\Support\LocaleResolver;
 use Bandada\Notification\InterfaceAdapters\Shared\Logging\LogContext;
 use Bandada\Notification\InterfaceAdapters\Shared\Messaging\Traceparent;
+use Bandada\Notification\InterfaceAdapters\Shared\Telemetry\Span;
+use Bandada\Notification\InterfaceAdapters\Shared\Telemetry\Telemetry;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Str;
+use OpenTelemetry\API\Trace\SpanKind;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -18,6 +21,8 @@ use Symfony\Component\HttpFoundation\Response;
 final class RequestContext
 {
     private float $startedAt = 0.0;
+
+    private ?Span $span = null;
 
     public function __construct(private readonly LoggerInterface $logger) {}
 
@@ -35,6 +40,14 @@ final class RequestContext
         $request->attributes->set('locale', $locale);
         LogContext::set($correlationId, Traceparent::traceId($traceparent));
         App::setLocale($locale);
+
+        if (! str_starts_with($request->path(), 'health')) {
+            $this->span = Telemetry::start($request->method().' /'.ltrim($request->path(), '/'), SpanKind::KIND_SERVER, is_string($incomingTrace) && Traceparent::isValid($incomingTrace) ? $incomingTrace : null, [
+                'http.request.method' => $request->method(),
+                'url.path' => '/'.ltrim($request->path(), '/'),
+                'bandada.correlation_id' => $correlationId,
+            ]);
+        }
 
         $response = $next($request);
         $response->headers->set('X-Correlation-Id', $correlationId);
@@ -55,6 +68,9 @@ final class RequestContext
                 'durationMs' => (int) round((microtime(true) - $this->startedAt) * 1000),
             ]);
         }
+        $this->span?->setAttribute('http.response.status_code', $response->getStatusCode());
+        $this->span?->end();
+        $this->span = null;
         LogContext::clear();
     }
 }

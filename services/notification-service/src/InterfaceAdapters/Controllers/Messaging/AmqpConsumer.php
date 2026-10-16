@@ -12,6 +12,8 @@ use Bandada\Notification\InterfaceAdapters\Shared\Messaging\CloudEvent;
 use Bandada\Notification\InterfaceAdapters\Shared\Messaging\Exception\InvalidMessageException;
 use Bandada\Notification\InterfaceAdapters\Shared\Messaging\Traceparent;
 use Bandada\Notification\InterfaceAdapters\Shared\Process\Heartbeat;
+use Bandada\Notification\InterfaceAdapters\Shared\Telemetry\Telemetry;
+use OpenTelemetry\API\Trace\SpanKind;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AbstractConnection;
 use PhpAmqpLib\Exception\AMQPTimeoutException;
@@ -131,20 +133,31 @@ final class AmqpConsumer
     private function onMessage(AMQPMessage $message, AMQPChannel $publisher): void
     {
         $event = null;
+        $span = null;
         try {
             $event = CloudEvent::fromJson($message->getBody());
+            $span = Telemetry::start('process '.$event->type, SpanKind::KIND_CONSUMER, Traceparent::isValid($event->traceparent) ? $event->traceparent : null, [
+                'messaging.system' => 'rabbitmq',
+                'messaging.operation.type' => 'process',
+                'messaging.message.id' => $event->id,
+                'bandada.event.type' => $event->type,
+            ]);
             LogContext::set($event->correlationId, Traceparent::traceId($event->traceparent));
             $this->handler->handle($event);
             $message->ack();
             $this->logger->info('Message processed', ['event' => 'message.processed', 'type' => $event->type, 'messageId' => $event->id]);
         } catch (InvalidMessageException|DomainException $e) {
+            $span?->fail($e);
             $this->logger->error('Permanent message failure, sent to DLQ', [
                 'event' => 'message.rejected', 'type' => $event?->type, 'messageId' => $event !== null ? $event->id : ($message->get_properties()['message_id'] ?? null), 'error' => $e->getMessage(),
             ]);
             $message->nack(false);
         } catch (Throwable $e) {
+            $span?->fail($e);
             $this->retryOrDeadLetter($message, $publisher, $e, $event);
         } finally {
+            $span?->end();
+            Telemetry::flush();
             $this->processed++;
             LogContext::clear();
         }

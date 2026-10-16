@@ -28,7 +28,7 @@ deptrac:
     - name: Framework
       collectors:
         - type: classLike
-          value: ^(Illuminate|Symfony|Monolog|Psr|PhpAmqpLib|Aws|Firebase|Ramsey|GuzzleHttp|Minishlink)\\.*
+          value: ^(Illuminate|Symfony|Monolog|Psr|PhpAmqpLib|Aws|Firebase|Ramsey|GuzzleHttp|Minishlink|OpenTelemetry)\\.*
   ruleset:
     Entities: []
     Ports: [Entities]

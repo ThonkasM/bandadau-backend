@@ -28,6 +28,7 @@ use Bandada\Notification\InterfaceAdapters\Gateways\WebPush\WebPushSender;
 use Bandada\Notification\InterfaceAdapters\Shared\Amqp\AmqpConnectionFactory;
 use Bandada\Notification\InterfaceAdapters\Shared\Amqp\Topology;
 use Bandada\Notification\InterfaceAdapters\Shared\Idempotency\IdempotencyStore;
+use Bandada\Notification\InterfaceAdapters\Shared\Telemetry\Telemetry;
 use Bandada\Notification\UseCases\Notify\EventToNotificationMapper;
 use Bandada\Notification\UseCases\Notify\NotificationSettings;
 use Bandada\Notification\UseCases\Ports\Clock;
@@ -89,6 +90,12 @@ class NotificationServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Telemetry::boot(
+            (bool) config('notification.otel.enabled'),
+            (string) config('notification.otel.endpoint'),
+            (string) config('notification.otel.service_name'),
+            (array) config('notification.otel.resource_attributes'),
+        );
         if (! $this->app->runningInConsole() && ! $this->app->runningUnitTests()) {
             EnvironmentValidator::assertValid();
         }

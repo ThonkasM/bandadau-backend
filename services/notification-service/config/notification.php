@@ -2,8 +2,24 @@
 
 $bool = static fn (string $key, bool $default): bool => filter_var(env($key, $default), FILTER_VALIDATE_BOOLEAN);
 
+$otelEndpoint = trim((string) env('OTEL_EXPORTER_OTLP_ENDPOINT', ''));
+$otelAttributes = [];
+foreach (explode(',', (string) env('OTEL_RESOURCE_ATTRIBUTES', '')) as $pair) {
+    [$k, $v] = array_pad(explode('=', $pair, 2), 2, '');
+    if (trim($k) !== '' && trim($v) !== '') {
+        $otelAttributes[trim($k)] = trim($v);
+    }
+}
+
 return [
     'service' => 'notification-service',
+    // R-4: trace export over OTLP/HTTP. Off without an endpoint or with OTEL_SDK_DISABLED=true.
+    'otel' => [
+        'enabled' => ! $bool('OTEL_SDK_DISABLED', false) && $otelEndpoint !== '',
+        'endpoint' => $otelEndpoint,
+        'service_name' => (string) env('OTEL_SERVICE_NAME', 'notification-service'),
+        'resource_attributes' => $otelAttributes,
+    ],
     'table' => (string) env('NOTIFICATIONS_TABLE', 'bandada-notifications'),
     'ttl_days' => (int) env('NOTIFICATION_TTL_DAYS', 90),
     'inbox_ttl_days' => 14,

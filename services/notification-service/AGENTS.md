@@ -12,7 +12,7 @@ destinatario, respetando sus preferencias. Servicio terminal: no publica eventos
 ## Stack
 
 PHP 8.4 · Laravel 12.70 (composition root) · DynamoDB `bandada-notifications` (+ `bandada-idempotency`) · RabbitMQ (`php-amqplib`) ·
-Laravel Mailer (SMTP → Mailpit) · ICU `MessageFormatter` (ext-intl) · Pest · Larastan nivel 8 · Deptrac · Pint.
+Laravel Mailer (SMTP → Mailpit) · OpenTelemetry PHP (trazas OTLP) · ICU `MessageFormatter` (ext-intl) · Pest · Larastan nivel 8 · Deptrac · Pint.
 
 ## Arquitectura: Clean
 
@@ -51,14 +51,18 @@ Otros: `bandada:check-env`, `bandada:wait-for-schema` (verifica tablas y GSI1; c
 
 `NOTIFICATIONS_TABLE`, `IDEMPOTENCY_TABLE`, `DYNAMODB_ENDPOINT`, `AWS_*`, `RABBITMQ_URL`, `RABBITMQ_DECLARE_TOPOLOGY`, `JWKS_URL`,
 `JWT_ISSUER`, `NOTIFICATION_TTL_DAYS`, `APP_DEEP_LINK_BASE`, `EMAIL_ENABLED`, `PUSH_ENABLED`, `EXPO_PUSH_URL`, `EXPO_ACCESS_TOKEN`, `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `WEB_PUSH_TTL_SECONDS`,
-`MAIL_*`, `CORS_ORIGINS`, `LOG_CHANNEL` (`stdout`|`stderr`).
+`OTEL_SDK_DISABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `MAIL_*`, `CORS_ORIGINS`, `LOG_CHANNEL` (`stdout`|`stderr`).
 
 ## Endpoints
 
 Implementados: `listNotifications` (cursor, `unreadOnly`, cabecera `X-Unread-Count`), `markNotificationRead`,
 `markAllNotificationsRead`, `getNotificationPreferences`, `updateNotificationPreferences`, `registerDevice`,
 `unregisterDevice`, `sendNotification` (`/internal/v1/notifications`, `internal:write`, Idempotency-Key + `dedupeKey` 7 días),
-`/health/live`, `/health/ready`. Diferido: exportador OTLP (no hay SDK OpenTelemetry para PHP en las dependencias; solo se propaga `traceparent`; las variables `OTEL_*` existen pero no se usan).
+`/health/live`, `/health/ready`. 
+Observabilidad (R-4): trazas por OTLP/HTTP protobuf con `open-telemetry/sdk` + `open-telemetry/exporter-otlp` (`Shared/Telemetry/Telemetry`), activado solo si `OTEL_SDK_DISABLED` no es `true` y
+`OTEL_EXPORTER_OTLP_ENDPOINT` no está vacío (`config/notification.php` → `otel`); apagado, la API devuelve spans no-op. Un span `SERVER` por petición HTTP (salvo `/health`, hijo del `traceparent` entrante) y un span `CONSUMER`
+por mensaje (hijo del `traceparent` del CloudEvent). Exportación de mejor esfuerzo: timeout 1 s, sin reintentos, nunca falla la petición; en FPM el lote se envía en el *shutdown*, tras liberar al cliente
+(`fastcgi_finish_request`), y el consumidor hace *flush* tras cada mensaje. Sin métricas OTLP (solo trazas).
 
 ## Mensajería
 
