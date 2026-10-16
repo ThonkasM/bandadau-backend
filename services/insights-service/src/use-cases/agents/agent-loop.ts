@@ -25,6 +25,8 @@ export interface LoopInput {
   maxOutputTokens?: number;
   /** Names the agent may call even when only a routed subset is offered to the model (default: the offered tools). */
   allowedNames?: string[];
+  /** On the last allowed LLM step no tools are offered, so the model must answer with what it has instead of ending in AGENT_STEP_LIMIT (Q&A mode). */
+  forceFinalAnswer?: boolean;
 }
 export interface LoopOutput {
   messages: LlmMessage[];
@@ -118,7 +120,7 @@ export class AgentLoop {
         locale: input.locale,
         system: input.system,
         messages,
-        tools: offered,
+        tools: input.forceFinalAnswer && run.llmSteps >= limits.maxSteps - 1 ? undefined : offered,
         maxTokens: input.maxOutputTokens ?? 4096,
         effort: 'medium',
         meta: input.meta,

@@ -114,7 +114,7 @@ export class GenerateReportUseCase {
         limits: REPORT_GUARDRAILS(qa ? Math.min(this.options.maxSteps, QA_MAX_TOOL_ROUNDS + 1) : this.options.maxSteps, this.options.maxTokens),
         mcp,
         meta,
-        ...(qa ? { maxOutputTokens: QA_MAX_OUTPUT_TOKENS } : {}),
+        ...(qa ? { maxOutputTokens: QA_MAX_OUTPUT_TOKENS, forceFinalAnswer: true } : {}),
       });
 
       const fctx: FidelityContext = { question: report.question, today, toolCalls };

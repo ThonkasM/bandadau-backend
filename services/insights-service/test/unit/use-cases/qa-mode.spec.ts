@@ -152,12 +152,14 @@ describe('Q&A mode (agent engine)', () => {
     expect(steps.filter((s) => s.kind === 'TOOL_CALL').map((s) => s.outputSummary?.startsWith('(cached)'))).toEqual([false, true]);
   });
 
-  it('at most 4 rounds of tools in Q&A mode (5 LLM calls) then AGENT_STEP_LIMIT', async () => {
-    const llm = new ScriptedLlm(() => asAgent(toolUse({ name: 'get_credit_stats', input: { from: '2026-10-15', to: '2026-10-15' } })));
+  it('at most 4 rounds of tools in Q&A mode: the 5th LLM call has no tools and must answer (no AGENT_STEP_LIMIT)', async () => {
+    const llm = new ScriptedLlm((req) => asAgent(req.tools?.length ? toolUse({ name: 'get_credit_stats', input: { from: '2026-10-15', to: '2026-10-15', groupBy: String(req.messages.length) } }) : say(GOOD)));
     const { ask } = setup(llm);
     const { report } = await ask('¿Cuántos créditos se gastaron hoy?');
     expect(llm.requests).toHaveLength(5);
-    expect(report.status).toBe('FAILED');
+    expect(llm.requests.map((r) => Boolean(r.tools?.length))).toEqual([true, true, true, true, false]);
+    expect(report.status).toBe('READY');
+    expect(report.markdown).toBe(GOOD);
   });
 
   it('does not regenerate when the engine is deterministic/hybrid (it would return the same draft): straight to the final check', async () => {
