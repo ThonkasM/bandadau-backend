@@ -61,7 +61,7 @@ import { DeletePostUseCase } from '../../use-cases/posts/delete-post.use-case';
 import { GetPostUseCase } from '../../use-cases/posts/get-post.use-case';
 import { PostAccess } from '../../use-cases/posts/post-access';
 import { PostAssembler } from '../../use-cases/posts/post-assembler';
-import { GetProfileUseCase, ProfileReader, UpdateMyProfileUseCase } from '../../use-cases/profiles/profile.use-cases';
+import { GetProfileNamesUseCase, GetProfileUseCase, ProfileReader, UpdateMyProfileUseCase } from '../../use-cases/profiles/profile.use-cases';
 import { RemoveReactionUseCase, SetReactionUseCase } from '../../use-cases/reactions/set-reaction.use-case';
 import { GetContentDailyStatsUseCase } from '../../use-cases/reports/daily-stats.use-case';
 import { GetCommentInternalUseCase, GetPostInternalUseCase, ListContentReportsUseCase, ListPostsByStatusUseCase, ResolveContentReportUseCase, UpdatePostStatusUseCase } from '../../use-cases/reports/moderation.use-cases';
@@ -126,6 +126,7 @@ const repo = <T>(token: symbol, cls: new (ctx: MongoContext) => T) => ({ provide
     factory(ProfileReader, PROFILE_REPOSITORY, FOLLOW_REPOSITORY, POST_REPOSITORY, PostAssembler),
 
     factory(GetProfileUseCase, ProfileReader),
+    factory(GetProfileNamesUseCase, PROFILE_REPOSITORY),
     factory(UpdateMyProfileUseCase, PROFILE_REPOSITORY, MEDIA_GATEWAY, ProfileReader, CLOCK),
     factory(CreatePostUseCase, POST_REPOSITORY, PROFILE_REPOSITORY, GROUP_REPOSITORY, MEMBERSHIP_REPOSITORY, MEDIA_VIEW_REPOSITORY, MEDIA_GATEWAY, EVENT_PUBLISHER, UNIT_OF_WORK, ID_GENERATOR, CLOCK, PostAssembler),
     factory(GetPostUseCase, POST_REPOSITORY, PostAccess, PostAssembler),

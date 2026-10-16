@@ -43,6 +43,20 @@ export class GetProfileUseCase {
   }
 }
 
+/** getProfileNamesInternal: `displayName` of up to 50 users in one call (ids without a profile are omitted). */
+export class GetProfileNamesUseCase {
+  static readonly MAX_IDS = 50;
+
+  constructor(private readonly profiles: ProfileRepository) {}
+
+  async execute(input: { userIds: readonly string[] }): Promise<{ userId: string; displayName: string }[]> {
+    const unique = [...new Set(input.userIds)].slice(0, GetProfileNamesUseCase.MAX_IDS);
+    if (unique.length === 0) return [];
+    const found = await this.profiles.findByIds(unique);
+    return found.map((p) => ({ userId: p.snapshot.userId, displayName: p.snapshot.displayName }));
+  }
+}
+
 export interface UpdateProfileInput extends ProfilePatch {
   userId: string;
   /** undefined = unchanged, null = remove the avatar. */

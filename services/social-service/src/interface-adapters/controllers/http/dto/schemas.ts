@@ -57,4 +57,10 @@ export const resolveReportBody = z.object({ resolution: z.enum(['KEEP', 'REMOVE'
 export const internalGroupsQuery = pageQuery.extend({ career: z.string().min(2).max(100).optional() });
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const statsQuery = z.object({ from: date, to: date, topHashtags: z.coerce.number().int().min(0).max(50).default(10) });
+export const profileNamesQuery = z.object({
+  ids: z
+    .string()
+    .transform((v) => v.split(',').map((x) => x.trim()).filter(Boolean))
+    .pipe(z.array(uuid).min(1).max(50)),
+});
 export const actorHeader = uuid;

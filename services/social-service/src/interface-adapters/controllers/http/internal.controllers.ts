@@ -3,7 +3,7 @@ import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Patch, Query, 
 import type { z } from 'zod';
 
 import { ListGroupsInternalUseCase } from '../../../use-cases/groups/group.use-cases';
-import { GetProfileUseCase } from '../../../use-cases/profiles/profile.use-cases';
+import { GetProfileNamesUseCase, GetProfileUseCase } from '../../../use-cases/profiles/profile.use-cases';
 import { GetContentDailyStatsUseCase } from '../../../use-cases/reports/daily-stats.use-case';
 import {
   GetCommentInternalUseCase,
@@ -19,6 +19,7 @@ import {
   actorHeader,
   internalGroupsQuery,
   postsByStatusQuery,
+  profileNamesQuery,
   reportsQuery,
   resolveReportBody,
   statsQuery,
@@ -44,6 +45,7 @@ export class InternalController {
     @Inject(ListContentReportsUseCase) private readonly reports: ListContentReportsUseCase,
     @Inject(ResolveContentReportUseCase) private readonly resolve: ResolveContentReportUseCase,
     @Inject(GetProfileUseCase) private readonly profile: GetProfileUseCase,
+    @Inject(GetProfileNamesUseCase) private readonly profileNames: GetProfileNamesUseCase,
     @Inject(ListGroupsInternalUseCase) private readonly groups: ListGroupsInternalUseCase,
     @Inject(GetContentDailyStatsUseCase) private readonly stats: GetContentDailyStatsUseCase,
   ) {}
@@ -88,6 +90,11 @@ export class InternalController {
   ) {
     const actorId = actor.transform(actorHeaderValue);
     return presentReport(await this.resolve.execute({ reportId, actorId, resolution: body.resolution, note: body.note ?? null }));
+  }
+
+  @Get('profiles')
+  async getProfileNamesInternal(@Query(new ZodValidationPipe(profileNamesQuery)) q: In<typeof profileNamesQuery>) {
+    return { items: await this.profileNames.execute({ userIds: q.ids }) };
   }
 
   @Get('profiles/:userId')

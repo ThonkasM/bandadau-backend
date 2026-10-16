@@ -188,6 +188,22 @@ describe('reports', () => {
   });
 });
 
+describe('profile names batch (internal)', () => {
+  it('/internal: getProfileNamesInternal resolves displayName only, omits unknown ids, validates input, enforces scopes', async () => {
+    const svc = await h.serviceToken('internal:read');
+    const r = await h.http('GET', `/internal/v1/profiles?ids=${users.ana},${users.bob},${uuidv7()}`, { token: svc });
+    expect(r.status).toBe(200);
+    const items = r.body.items as Record<string, unknown>[];
+    expect(items).toHaveLength(2);
+    expect(items.find((i) => i.userId === users.ana)).toEqual({ userId: users.ana, displayName: 'ana' });
+    expect(Object.keys(items[0] as object).sort()).toEqual(['displayName', 'userId']);
+    expect((await h.http('GET', '/internal/v1/profiles', { token: svc })).status).toBe(400);
+    expect((await h.http('GET', '/internal/v1/profiles?ids=not-a-uuid', { token: svc })).status).toBe(400);
+    expect((await h.http('GET', `/internal/v1/profiles?ids=${users.ana}`, { token: await h.serviceToken('') })).status).toBe(403);
+    expect((await h.http('GET', `/internal/v1/profiles?ids=${users.ana}`, { token: tokens.ana })).status).toBe(401);
+  });
+});
+
 describe('comments, reactions, follows', () => {
   it('createComment is idempotent and counts', async () => {
     const post = await h.http('POST', '/api/v1/posts', { token: tokens.ana, body: { clientId: uuidv7(), text: 'comenten', mediaIds: [], visibility: 'PUBLIC' }, headers: key() });
