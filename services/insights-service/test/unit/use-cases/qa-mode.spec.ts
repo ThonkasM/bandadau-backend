@@ -160,6 +160,16 @@ describe('Q&A mode (agent engine)', () => {
     expect(report.status).toBe('FAILED');
   });
 
+  it('does not regenerate when the engine is deterministic/hybrid (it would return the same draft): straight to the final check', async () => {
+    const det = (r: LlmResponse): LlmResponse => ({ ...r, model: 'stub-deterministic-1', engine: 'STUB', mode: 'DETERMINISTIC' });
+    const composed = { title: 'Respuesta', markdown: '## Reporte de la plataforma\n\nSe gastaron 105 créditos.', dataset: { columns: [{ name: 'm', type: 'string' }, { name: 'v', type: 'integer' }], rows: [['Gastados', 105]] }, chartIntent: { type: 'table' } };
+    const llm = new ScriptedLlm([() => det(toolUse({ name: 'get_credit_stats', input: { from: '2026-10-15', to: '2026-10-15' } })), () => det(say('ok')), () => det(say(JSON.stringify(composed)))]);
+    const { report, run } = await setup(llm).ask('¿Cuántos créditos se gastaron hoy?');
+    expect(llm.requests.map((r) => r.purpose)).toEqual(['collect', 'collect', 'compose']);
+    expect(run.verification).toEqual({ passed: true, retries: 0, unsupportedNumbers: [] });
+    expect(report.model).toBe('stub-deterministic-1');
+  });
+
   it('an explicit summary keeps the report format (report prompts, compose step, audio script call)', async () => {
     const composed = { title: 'Resumen de la semana', markdown: '## Resumen\n\nSe confirmaron 11 inscripciones.', dataset: { columns: [{ name: 'm', type: 'string' }, { name: 'v', type: 'integer' }], rows: [['Confirmadas', 11]] }, chartIntent: { type: 'table' } };
     const llm = new ScriptedLlm([
@@ -235,7 +245,7 @@ describe('AgentLoop compaction', () => {
       mcp: new FakeMcp({ get_platform_kpis: { a: null, b: 1.23456, rows: Array.from({ length: 60 }, (_, i) => ({ i })) } }, new Set(), [{ name: 'get_platform_kpis', description: 'x', inputSchema: {} }]),
     });
     const offered = llm.requests[0]!.tools![0]!;
-    expect(offered.description.length).toBeLessThan(230);
+    expect(offered.description.length).toBeLessThanOrEqual(330);
     expect(JSON.stringify(offered.inputSchema)).not.toContain('examples');
     const content = (out.messages[1]!.content[0] as { content: string }).content;
     expect(content).not.toContain('"a"');
@@ -249,9 +259,11 @@ describe('AgentLoop compaction', () => {
 describe('tool routing (Q&A offers only the tools of the question topic)', () => {
   const ALL = ['calculate', 'detect_anomalies', 'get_content_rankings', 'get_content_stats', 'get_credit_stats', 'get_event_ranking', 'get_platform_kpis', 'get_registration_stats', 'get_service_health', 'get_ticket_stats', 'get_top_credit_spenders', 'get_user_stats', 'get_wallet_overview', 'list_events', 'list_failed_sagas', 'list_flagged_content', 'list_recent_registrations'].map((name) => ({ name }));
   const names = (q: string) => routeTools(q, ALL).map((t) => t.name);
-  it('narrows by topic and always keeps calculate', () => {
-    expect(names('¿Cuántos usuarios están suspendidos?')).toEqual(['calculate', 'get_platform_kpis', 'get_user_stats']);
-    expect(names('¿Hay mensajes en las colas de error?')).toEqual(['calculate', 'get_service_health']);
+  it('narrows by topic and adds calculate only for derived figures', () => {
+    expect(names('¿Cuántos usuarios están suspendidos?')).toEqual(['get_platform_kpis', 'get_user_stats']);
+    expect(names('¿Hay mensajes en las colas de error?')).toEqual(['get_service_health']);
+    expect(names('¿Cuál es el promedio de créditos por inscripción?')).toContain('calculate');
+    expect(names('Compare this week registrations with last week')).toContain('calculate');
     expect(names('What is the platform health?')).toContain('get_service_health');
   });
   it('offers every tool when the topic is not recognized, and never routes to nothing', () => {

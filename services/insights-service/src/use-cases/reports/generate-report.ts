@@ -97,7 +97,7 @@ export class GenerateReportUseCase {
       const reportTools = allTools.filter((t) => (REPORT_AGENT_TOOLS as readonly string[]).includes(t.name)).sort((a, b) => a.name.localeCompare(b.name));
       const today = this.clock.now().toISOString().slice(0, 10);
       const qa = !isSummaryRequest(report.question);
-      const tools = qa ? routeTools(report.question, reportTools) : reportTools;
+      const tools = routeTools(report.question, reportTools);
       const es = report.locale === 'es';
       const system = qa ? this.prompts.qaSystem(report.locale) : this.prompts.system('report', report.locale);
       const header = es ? `Fecha de hoy: ${today} (UTC).` : `Today's date: ${today} (UTC).`;
@@ -125,7 +125,8 @@ export class GenerateReportUseCase {
       let check = this.check(draft, direct !== null, toolResults, fctx, qa);
       const firstUnsupported = check.unsupported;
       let retries = 0;
-      if (needsRewrite(check)) {
+      // hybrid/deterministic engines would answer the regeneration with the very same draft: only an agent engine (or an unknown one) is asked again
+      if (needsRewrite(check) && run.engineMode !== 'DETERMINISTIC' && run.engineMode !== 'HYBRID') {
         // ONE silent regeneration with an internal instruction; the user never sees an apology
         retries = 1;
         this.logger.warn('final text failed verification; regenerating silently', { reportId, unsupported: check.unsupported.slice(0, 5), chatter: check.chatter, notAnAnswer: check.notAnAnswer });

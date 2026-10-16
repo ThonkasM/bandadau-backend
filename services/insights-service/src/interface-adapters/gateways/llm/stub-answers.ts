@@ -47,7 +47,7 @@ export function planExtra(intent: Intent, question: string, offered: Set<string>
       return only('get_event_ranking', { ...rangeOf(question, today, true), by: eventRankingBy(q) ?? 'REVENUE', limit: topN(q, 5) });
     case 'EVENTS_COUNT':
     case 'EVENTS_NO_ATTENDEES':
-      return only('list_events', { from: `${ymd(startOfDay(today) - 365 * DAY)}T00:00:00Z`, to: `${ymd(startOfDay(today) + 365 * DAY)}T23:59:59Z`, status: 'PUBLISHED', limit: 100 });
+      return only('list_events', { from: `${ymd(startOfDay(today) - 365 * DAY)}T00:00:00Z`, to: `${ymd(startOfDay(today) + 365 * DAY)}T23:59:59Z`, status: 'PUBLISHED', limit: 50 });
     case 'UPCOMING_EVENTS':
       return only('list_events', { from: `${today}T00:00:00Z`, to: `${ymd(startOfDay(today) + 180 * DAY)}T23:59:59Z`, status: 'PUBLISHED', limit: 50 });
     case 'MODERATION_PENDING':

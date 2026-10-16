@@ -41,7 +41,7 @@ export function compactTool(t: LlmToolDef): LlmToolDef {
     if (v && typeof v === 'object') {
       const out: Record<string, unknown> = {};
       for (const [k, x] of Object.entries(v)) {
-        if (k === 'description' && typeof x === 'string') out[k] = x.length > 70 ? `${x.slice(0, 67)}...` : x;
+        if (k === 'description' && typeof x === 'string') out[k] = x.length > 50 ? `${x.slice(0, 47)}...` : x;
         else if (k === 'examples' || k === 'title' || k === '$schema' || k === 'default') continue;
         else out[k] = strip(x);
       }
@@ -49,7 +49,7 @@ export function compactTool(t: LlmToolDef): LlmToolDef {
     }
     return v;
   };
-  return { name: t.name, description: t.description.length > 180 ? `${t.description.slice(0, 177)}...` : t.description, inputSchema: strip(t.inputSchema) as Record<string, unknown> };
+  return { name: t.name, description: t.description.length > 330 ? `${t.description.slice(0, 327)}...` : t.description, inputSchema: strip(t.inputSchema) as Record<string, unknown> };
 }
 
 const MAX_ARRAY = 40;
