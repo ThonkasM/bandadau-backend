@@ -70,3 +70,35 @@ it('ranks top spenders by net credits (debits minus refunds) and requires intern
         $this->getJson("/internal/v1/stats/top-spenders?{$query}", serviceHeaders())->assertStatus(400);
     }
 });
+
+it('summarizes current balances and requires internal:read', function () {
+    $ids = ['0192a3bf-aaaa-7bbb-8ccc-0000000000c1', '0192a3bf-aaaa-7bbb-8ccc-0000000000c2', '0192a3bf-aaaa-7bbb-8ccc-0000000000c3',
+        '0192a3bf-aaaa-7bbb-8ccc-0000000000c4', '0192a3bf-aaaa-7bbb-8ccc-0000000000c5'];
+    foreach (array_combine($ids, [100, 100, 7, 0, 3]) as $user => $balance) {
+        DB::table('wallets')->insert(['user_id' => $user, 'balance_credits' => $balance]);
+    }
+
+    $this->getJson('/internal/v1/stats/balances', serviceHeaders())
+        ->assertOk()
+        ->assertJsonPath('creditsInCirculation', 210)
+        ->assertJsonPath('walletsWithBalance', 4)
+        ->assertJsonPath('averageBalance', 52.5)
+        ->assertJsonCount(4, 'items')
+        ->assertJsonPath('items.0', ['userId' => $ids[0], 'balanceCredits' => 100])
+        ->assertJsonPath('items.1', ['userId' => $ids[1], 'balanceCredits' => 100])
+        ->assertJsonPath('items.2', ['userId' => $ids[2], 'balanceCredits' => 7]);
+    $this->getJson('/internal/v1/stats/balances?limit=1', serviceHeaders())->assertOk()->assertJsonCount(1, 'items')
+        ->assertJsonPath('creditsInCirculation', 210);
+    $this->getJson('/internal/v1/stats/balances', [])->assertStatus(401);
+    $this->getJson('/internal/v1/stats/balances', $this->auth())->assertStatus(403);
+    $this->getJson('/internal/v1/stats/balances', serviceHeaders('mcp:tools'))->assertStatus(403);
+    foreach (['limit=0', 'limit=21', 'limit=abc'] as $query) {
+        $this->getJson("/internal/v1/stats/balances?{$query}", serviceHeaders())->assertStatus(400);
+    }
+});
+
+it('reports zeros when no wallet has balance', function () {
+    $this->getJson('/internal/v1/stats/balances', serviceHeaders())->assertOk()
+        ->assertJsonPath('creditsInCirculation', 0)->assertJsonPath('walletsWithBalance', 0)
+        ->assertJsonPath('averageBalance', 0)->assertJsonCount(0, 'items');
+});

@@ -55,7 +55,7 @@ Roles de la imagen (misma imagen): `web` (por defecto; migra y levanta nginx+php
 
 Implementados: `getMyWallet`, `listMyLedgerEntries`, `createTopUp` (Idempotency-Key), `getTopUp`, `simulateTopUpPayment`
 (404 si `PAYMENT_SIMULATOR_ENABLED=false`; `outcome` `PAID`|`FAILED`|`UNAVAILABLE`), `paymentWebhook` (HMAC `X-Signature: sha256=<hex>`, ventana anti-replay 5 min sobre
-`occurredAt`, 200 + `duplicate:true` en repetidos), `getCreditStats` (`/internal/v1/stats/credits`, token de servicio `internal:read`), `getTopSpenders` (`/internal/v1/stats/top-spenders`: ranking por débitos − reembolsos, `internal:read`; MCP `get_top_credit_spenders`),
+`occurredAt`, 200 + `duplicate:true` en repetidos), `getCreditStats` (`/internal/v1/stats/credits`, token de servicio `internal:read`), `getTopSpenders` (`/internal/v1/stats/top-spenders`: ranking por débitos − reembolsos, `internal:read`; MCP `get_top_credit_spenders`), `getBalanceOverview` (`/internal/v1/stats/balances`: créditos en circulación, billeteras con saldo, promedio y top `limit` por saldo, `internal:read`; MCP `get_wallet_overview`),
 `/health/live`, `/health/ready` (Postgres, RabbitMQ, DynamoDB). Diferido: limitación de tasa por usuario (429), exportador OTLP
 (solo se propaga `traceparent`).
 

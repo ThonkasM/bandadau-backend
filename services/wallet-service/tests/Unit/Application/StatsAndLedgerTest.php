@@ -3,8 +3,10 @@
 use Bandada\Wallet\Application\Port\In\CreditStatsQuery;
 use Bandada\Wallet\Application\Port\In\ListLedgerEntriesQuery;
 use Bandada\Wallet\Application\Port\In\TopSpendersQuery;
+use Bandada\Wallet\Application\Port\Out\BalanceOverviewRepository;
 use Bandada\Wallet\Application\Port\Out\LedgerStatsRepository;
 use Bandada\Wallet\Application\Port\Out\TopSpendersRepository;
+use Bandada\Wallet\Application\UseCase\GetBalanceOverviewService;
 use Bandada\Wallet\Application\UseCase\GetCreditStatsService;
 use Bandada\Wallet\Application\UseCase\GetMyWalletService;
 use Bandada\Wallet\Application\UseCase\GetTopSpendersService;
@@ -130,3 +132,44 @@ it('rejects inverted or oversized ranges for top spenders', function (string $fr
         new TopSpendersQuery(new DateTimeImmutable($from, $utc), new DateTimeImmutable($to, $utc)),
     );
 })->with([['2026-10-09', '2026-10-01'], ['2025-01-01', '2026-10-01']])->throws(InvalidStatsRangeException::class);
+
+it('computes the balance overview with a rounded average and clamps the limit to 1..20', function (int $asked, int $expected) {
+    $repo = new class implements BalanceOverviewRepository
+    {
+        public int $limit = 0;
+
+        public function totals(): array
+        {
+            return ['creditsInCirculation' => 100, 'walletsWithBalance' => 3];
+        }
+
+        public function topBalances(int $limit): array
+        {
+            $this->limit = $limit;
+
+            return [['userId' => 'u1', 'balanceCredits' => 60]];
+        }
+    };
+
+    $out = (new GetBalanceOverviewService($repo))->handle($asked);
+
+    expect($out->creditsInCirculation)->toBe(100)->and($out->walletsWithBalance)->toBe(3)
+        ->and($out->averageBalance)->toBe(33.33)->and($repo->limit)->toBe($expected)->and($out->items)->toHaveCount(1);
+})->with([[5, 5], [500, 20], [0, 1]]);
+
+it('reports a zero average when no wallet has balance', function () {
+    $repo = new class implements BalanceOverviewRepository
+    {
+        public function totals(): array
+        {
+            return ['creditsInCirculation' => 0, 'walletsWithBalance' => 0];
+        }
+
+        public function topBalances(int $limit): array
+        {
+            return [];
+        }
+    };
+
+    expect((new GetBalanceOverviewService($repo))->handle()->averageBalance)->toBe(0.0);
+});

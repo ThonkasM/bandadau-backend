@@ -1,6 +1,7 @@
 <?php
 
 use Bandada\Wallet\Adapter\In\Http\Controllers\HealthController;
+use Bandada\Wallet\Adapter\In\Http\Controllers\InternalBalancesController;
 use Bandada\Wallet\Adapter\In\Http\Controllers\InternalStatsController;
 use Bandada\Wallet\Adapter\In\Http\Controllers\InternalTopSpendersController;
 use Bandada\Wallet\Adapter\In\Http\Controllers\PaymentWebhookController;
@@ -27,4 +28,5 @@ Route::prefix('api/v1/wallet')->group(function (): void {
 Route::prefix('internal/v1')->middleware('auth.jwt:service,internal:read')->group(function (): void {
     Route::get('stats/credits', InternalStatsController::class);
     Route::get('stats/top-spenders', InternalTopSpendersController::class);
+    Route::get('stats/balances', InternalBalancesController::class);
 });
