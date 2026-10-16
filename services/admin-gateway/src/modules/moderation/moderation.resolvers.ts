@@ -27,9 +27,17 @@ export function moderationResolvers(service: ModerationService) {
         });
       },
     },
+    Comment: {
+      author: (c: { authorId: string }, _: unknown, ctx: Ctx) => ctx.loaders.users.load(c.authorId),
+    },
     ContentReport: {
       reporter: (r: { reporterId: string }, _: unknown, ctx: Ctx) => ctx.loaders.users.load(r.reporterId),
-      post: (r: { targetType: string; targetId: string }, _: unknown, ctx: Ctx) => (r.targetType === 'POST' ? ctx.loaders.posts.load(r.targetId) : null),
+      post: async (r: { targetType: string; targetId: string }, _: unknown, ctx: Ctx) => {
+        if (r.targetType === 'POST') return ctx.loaders.posts.load(r.targetId);
+        const comment = await ctx.loaders.comments.load(r.targetId);
+        return comment ? ctx.loaders.posts.load(comment.postId) : null;
+      },
+      comment: (r: { targetType: string; targetId: string }, _: unknown, ctx: Ctx) => (r.targetType === 'COMMENT' ? ctx.loaders.comments.load(r.targetId) : null),
       resolvedBy: () => null,
     },
   };

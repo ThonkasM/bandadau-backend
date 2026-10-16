@@ -4,7 +4,7 @@ import DataLoader from 'dataloader';
 import type { GraphQLError } from 'graphql';
 
 import type { DataSources } from '../data-sources/data-sources';
-import type { CallContext, IdentityUniversity, IdentityUser, MediaUrl, ModerationPost, SagaDto, SocialProfile } from '../data-sources/types';
+import type { CallContext, IdentityUniversity, IdentityUser, MediaUrl, ModerationPost, SagaDto, SocialComment, SocialProfile } from '../data-sources/types';
 
 export interface Loaders {
   users: DataLoader<string, IdentityUser | null>;
@@ -13,6 +13,7 @@ export interface Loaders {
   universities: DataLoader<string, IdentityUniversity | null>;
   sagas: DataLoader<string, SagaDto[]>;
   posts: DataLoader<string, ModerationPost | null>;
+  comments: DataLoader<string, SocialComment | null>;
 }
 
 export interface GatewayContext {
@@ -59,6 +60,7 @@ export function createLoaders(ds: DataSources, call: CallContext, options: { cac
       return keys.map(() => all);
     }),
     posts: loader<ModerationPost | null>((ids) => Promise.all(ids.map((id) => ds.social.getPost(call, id)))),
+    comments: loader<SocialComment | null>((ids) => Promise.all(ids.map((id) => ds.social.getComment(call, id)))),
     universities: loader<IdentityUniversity | null>(async (ids) => {
       const all = new Map((await ds.identity.listUniversities(call)).map((u) => [u.id, u]));
       return ids.map((id) => all.get(id) ?? null);

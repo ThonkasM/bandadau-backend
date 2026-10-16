@@ -6,6 +6,7 @@ import { ListGroupsInternalUseCase } from '../../../use-cases/groups/group.use-c
 import { GetProfileUseCase } from '../../../use-cases/profiles/profile.use-cases';
 import { GetContentDailyStatsUseCase } from '../../../use-cases/reports/daily-stats.use-case';
 import {
+  GetCommentInternalUseCase,
   GetPostInternalUseCase,
   ListContentReportsUseCase,
   ListPostsByStatusUseCase,
@@ -13,7 +14,7 @@ import {
   UpdatePostStatusUseCase,
 } from '../../../use-cases/reports/moderation.use-cases';
 import { decodeCursor, decodeOffset, encodeOffset } from '../../presenters/cursor';
-import { page, presentGroup, presentModerationPost, presentPost, presentProfile, presentReport, presentStats } from '../../presenters/resource.presenter';
+import { page, presentComment, presentGroup, presentModerationPost, presentPost, presentProfile, presentReport, presentStats } from '../../presenters/resource.presenter';
 import {
   actorHeader,
   internalGroupsQuery,
@@ -38,6 +39,7 @@ export class InternalController {
   constructor(
     @Inject(ListPostsByStatusUseCase) private readonly postsByStatus: ListPostsByStatusUseCase,
     @Inject(GetPostInternalUseCase) private readonly getPost: GetPostInternalUseCase,
+    @Inject(GetCommentInternalUseCase) private readonly getComment: GetCommentInternalUseCase,
     @Inject(UpdatePostStatusUseCase) private readonly updateStatus: UpdatePostStatusUseCase,
     @Inject(ListContentReportsUseCase) private readonly reports: ListContentReportsUseCase,
     @Inject(ResolveContentReportUseCase) private readonly resolve: ResolveContentReportUseCase,
@@ -54,6 +56,11 @@ export class InternalController {
   @Get('posts/:postId')
   async getPostInternal(@Param('postId', new ZodValidationPipe(uuidParam, 'postId')) postId: string) {
     return presentModerationPost(await this.getPost.execute({ postId }));
+  }
+
+  @Get('comments/:commentId')
+  async getCommentInternal(@Param('commentId', new ZodValidationPipe(uuidParam, 'commentId')) commentId: string) {
+    return presentComment(await this.getComment.execute({ commentId }));
   }
 
   @Patch('posts/:postId/status')

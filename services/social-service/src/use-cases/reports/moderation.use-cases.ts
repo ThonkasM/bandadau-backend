@@ -2,6 +2,7 @@ import type { CommentProps } from '../../entities/comment.entity';
 import { type ContentReportProps, type ReportResolution, type ReportStatus,resolvedStatusFor } from '../../entities/content-report.entity';
 import { DomainError } from '../../entities/errors/domain-error';
 import type { Post, PostStatus } from '../../entities/post.entity';
+import type { CommentOutput } from '../comments/create-comment.use-case';
 import { SocialEvents } from '../events';
 import type { PostOutput } from '../outputs';
 import { paginate } from '../paginate';
@@ -46,6 +47,21 @@ export class GetPostInternalUseCase {
     const [assembled] = await this.assembler.assemble([post], null);
     const output = assembled as PostOutput;
     return { output, reportsCount: output.post.openReportsCount, hiddenReason: output.post.hiddenReason };
+  }
+}
+
+/** Internal read of a comment in any state (admin-gateway, R-1): no visibility filter. */
+export class GetCommentInternalUseCase {
+  constructor(
+    private readonly comments: CommentRepository,
+    private readonly assembler: PostAssembler,
+  ) {}
+
+  async execute(input: { commentId: string }): Promise<CommentOutput> {
+    const comment = await this.comments.findById(input.commentId);
+    if (!comment) throw new DomainError('COMMENT_NOT_FOUND');
+    const authors = await this.assembler.summaries([comment.authorId]);
+    return { comment, author: authors.get(comment.authorId) as CommentOutput['author'] };
   }
 }
 

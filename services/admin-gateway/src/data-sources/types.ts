@@ -99,6 +99,16 @@ export interface ModerationPost {
   updatedAt: string;
 }
 
+export interface SocialComment {
+  id: string;
+  postId: string;
+  authorId: string;
+  author?: { userId: string; displayName: string; avatarUrl: string | null };
+  text: string;
+  status: string;
+  createdAt: string;
+}
+
 export interface SocialReport {
   id: string;
   targetType: 'POST' | 'COMMENT';

@@ -172,6 +172,17 @@ describe('mutations', () => {
     expect(r.body.data.contentReports).toEqual([{ id: reportId, post: { id: postId, text: 'hola', status: 'HIDDEN' } }]);
   });
 
+  it('contentReports resolves the reported comment and its post for COMMENT reports (R-1)', async () => {
+    const reportId = '0192a3b4-0000-7000-8000-000000000611';
+    const commentId = '0192a3b4-0000-7000-8000-000000000612';
+    const postId = '0192a3b4-0000-7000-8000-000000000613';
+    h.mock('GET', '/social/internal/v1/reports', () => ({ body: { items: [{ id: reportId, targetType: 'COMMENT', targetId: commentId, reporterId: ids.u1, reason: 'HARASSMENT', details: null, status: 'OPEN', resolution: null, resolutionNote: null, createdAt: '2026-10-14T10:00:00Z', resolvedAt: null }], nextCursor: null } }));
+    h.mock('GET', `/social/internal/v1/comments/${commentId}`, () => ({ body: { id: commentId, postId, authorId: ids.u2, text: 'comentario ofensivo', status: 'VISIBLE', createdAt: '2026-10-14T09:30:00Z' } }));
+    h.mock('GET', `/social/internal/v1/posts/${postId}`, () => ({ body: { id: postId, authorId: ids.u3, text: 'post original', hashtags: [], visibility: 'PUBLIC', status: 'PUBLISHED', media: [], reportsCount: 0, createdAt: '2026-10-14T09:00:00Z', updatedAt: '2026-10-14T09:00:00Z' } }));
+    const r = await h.gql('{ contentReports { id comment { id postId text status } post { id text } } }', { token: moderator });
+    expect(r.body.data.contentReports).toEqual([{ id: reportId, comment: { id: commentId, postId, text: 'comentario ofensivo', status: 'VISIBLE' }, post: { id: postId, text: 'post original' } }]);
+  });
+
   it('retrySaga and sagas go to events-service', async () => {
     const sagaId = '0192a3b4-0000-7000-8000-000000000700';
     const saga = { id: sagaId, type: 'REGISTRATION', registrationId: ids.u1, eventId: ids.u2, userId: ids.u3, step: 'REFUND_CREDITS', status: 'FAILED', failureReason: 'TIMEOUT', retries: 3, deadlineAt: null, startedAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:01:00Z' };

@@ -63,7 +63,7 @@ import { PostAssembler } from '../../use-cases/posts/post-assembler';
 import { GetProfileUseCase, ProfileReader, UpdateMyProfileUseCase } from '../../use-cases/profiles/profile.use-cases';
 import { RemoveReactionUseCase, SetReactionUseCase } from '../../use-cases/reactions/set-reaction.use-case';
 import { GetContentDailyStatsUseCase } from '../../use-cases/reports/daily-stats.use-case';
-import { GetPostInternalUseCase, ListContentReportsUseCase, ListPostsByStatusUseCase, ResolveContentReportUseCase, UpdatePostStatusUseCase } from '../../use-cases/reports/moderation.use-cases';
+import { GetCommentInternalUseCase, GetPostInternalUseCase, ListContentReportsUseCase, ListPostsByStatusUseCase, ResolveContentReportUseCase, UpdatePostStatusUseCase } from '../../use-cases/reports/moderation.use-cases';
 import { ReportContentUseCase } from '../../use-cases/reports/report-content.use-case';
 import type { Env } from '../config/env';
 import { ENV, LOGGER, REPORT_THRESHOLD } from './tokens';
@@ -149,6 +149,7 @@ const repo = <T>(token: symbol, cls: new (ctx: MongoContext) => T) => ({ provide
     factory(ReportContentUseCase, POST_REPOSITORY, COMMENT_REPOSITORY, REPORT_REPOSITORY, PostAccess, EVENT_PUBLISHER, UNIT_OF_WORK, ID_GENERATOR, CLOCK, REPORT_THRESHOLD),
     factory(ListPostsByStatusUseCase, POST_REPOSITORY, PostAssembler),
     factory(GetPostInternalUseCase, POST_REPOSITORY, PostAssembler),
+    factory(GetCommentInternalUseCase, COMMENT_REPOSITORY, PostAssembler),
     factory(UpdatePostStatusUseCase, POST_REPOSITORY, PostAssembler, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),
     factory(ListContentReportsUseCase, REPORT_REPOSITORY),
     factory(ResolveContentReportUseCase, REPORT_REPOSITORY, POST_REPOSITORY, COMMENT_REPOSITORY, EVENT_PUBLISHER, UNIT_OF_WORK, CLOCK),

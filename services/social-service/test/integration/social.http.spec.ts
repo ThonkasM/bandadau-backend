@@ -171,6 +171,21 @@ describe('reports', () => {
     expect(denied.status).toBe(403);
     expect((await h.http('GET', `/internal/v1/posts/${post.body.id}`, { token: await h.serviceToken('') })).status).toBe(403);
   });
+
+  it('/internal: getCommentInternal in any state, 404 COMMENT_NOT_FOUND, scopes enforced', async () => {
+    const svc = await h.serviceToken();
+    const post = await h.http('POST', '/api/v1/posts', { token: tokens.ana, body: { clientId: uuidv7(), text: 'con comentario', mediaIds: [], visibility: 'PUBLIC' }, headers: key() });
+    const comment = await h.http('POST', `/api/v1/posts/${post.body.id}/comments`, { token: tokens.bob, body: { text: 'comentario interno' }, headers: key() });
+    await h.mongo.db(h.db).collection('comments').updateOne({ _id: comment.body.id as never }, { $set: { status: 'HIDDEN' } });
+    const r = await h.http('GET', `/internal/v1/comments/${comment.body.id}`, { token: svc });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ id: comment.body.id, postId: post.body.id, text: 'comentario interno', status: 'HIDDEN', author: { userId: users.bob } });
+    const missing = await h.http('GET', `/internal/v1/comments/${uuidv7()}`, { token: svc });
+    expect(missing.status).toBe(404);
+    expect(missing.body.code).toBe('COMMENT_NOT_FOUND');
+    expect((await h.http('GET', `/internal/v1/comments/${comment.body.id}`, { token: await h.serviceToken('internal:read') })).status).toBe(200);
+    expect((await h.http('GET', `/internal/v1/comments/${comment.body.id}`, { token: await h.serviceToken('') })).status).toBe(403);
+  });
 });
 
 describe('comments, reactions, follows', () => {

@@ -1,6 +1,6 @@
 import { ServiceHttpError } from '../common/errors';
 import type { ServiceHttp } from '../common/http-client';
-import type { CallContext, ContentDailyStats, ModerationPost, Page, SocialProfile, SocialReport } from './types';
+import type { CallContext, ContentDailyStats, ModerationPost, Page, SocialComment, SocialProfile, SocialReport } from './types';
 
 const opts = (ctx: CallContext) => ({ actorId: ctx.actorId, locale: ctx.locale, correlationId: ctx.correlationId });
 
@@ -15,6 +15,16 @@ export class SocialClient {
   async getPost(ctx: CallContext, postId: string): Promise<ModerationPost | null> {
     try {
       return await this.http.request<ModerationPost>('GET', `/internal/v1/posts/${postId}`, opts(ctx));
+    } catch (e) {
+      if (e instanceof ServiceHttpError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  /** Internal single comment in any state (R-1); `null` when it does not exist. */
+  async getComment(ctx: CallContext, commentId: string): Promise<SocialComment | null> {
+    try {
+      return await this.http.request<SocialComment>('GET', `/internal/v1/comments/${commentId}`, opts(ctx));
     } catch (e) {
       if (e instanceof ServiceHttpError && e.status === 404) return null;
       throw e;
