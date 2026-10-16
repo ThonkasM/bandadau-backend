@@ -165,6 +165,10 @@ public class BeanConfig {
         return new UniversityService(universities, ids, tx);
     }
 
+    @Bean UserStatsQueryPort userStatsQuery(JdbcClient jdbc) { return new JdbcUserStatsQuery(jdbc); }
+
+    @Bean GetUserStatsUseCase getUserStats(UserStatsQueryPort stats, ClockPort clock) { return new UserStatsService(stats, clock); }
+
     @Bean ProblemFactory problemFactory(MessageSource messages, ObjectMapper mapper) {
         return new ProblemFactory(messages, mapper);
     }

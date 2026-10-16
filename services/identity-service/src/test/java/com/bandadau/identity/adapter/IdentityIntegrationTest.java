@@ -596,6 +596,47 @@ class IdentityIntegrationTest {
         assertThat(count(pending)).isEqualTo(1);
     }
 
+    @Test @Order(16)
+    @SuppressWarnings("unchecked")
+    void userStatsAreAggregatedReadOnlyAndScopeProtected() throws Exception {
+        activeUser("stats@umsa.bo");
+        String reader = bearer((String) call("POST", "/api/v1/auth/service-token",
+                Map.of("clientId", "reader", "clientSecret", "ro-secret")).body().get("accessToken"));
+        Resp plain = call("GET", "/internal/v1/stats/users", null, "Authorization", reader);
+        assertThat(plain.status()).isEqualTo(200);
+        long total = jdbc.sql("SELECT count(*) FROM users WHERE status <> 'DELETED'").query(Long.class).single();
+        long active = jdbc.sql("SELECT count(DISTINCT user_id) FROM refresh_tokens WHERE created_at >= now() - interval '30 days'")
+                .query(Long.class).single();
+        assertThat(((Number) plain.body().get("totalUsers")).longValue()).isEqualTo(total);
+        assertThat(((Number) plain.body().get("activeUsers")).longValue()).isEqualTo(active);
+        assertThat(plain.body()).containsKey("newUsers").containsEntry("newUsers", null);
+        Map<String, Object> byStatus = (Map<String, Object>) plain.body().get("byStatus");
+        assertThat(byStatus).containsKeys("ACTIVE", "SUSPENDED", "PENDING_VERIFICATION");
+        assertThat(byStatus.values().stream().mapToLong(v -> ((Number) v).longValue()).sum()).isEqualTo(total);
+        List<Map<String, Object>> byUniversity = (List<Map<String, Object>>) plain.body().get("byUniversity");
+        assertThat(byUniversity).isNotEmpty();
+        assertThat(byUniversity.get(0)).containsOnlyKeys("universityId", "name", "users");
+        assertThat(byUniversity.stream().mapToLong(u -> ((Number) u.get("users")).longValue()).sum()).isEqualTo(total);
+
+        String today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString();
+        Resp ranged = call("GET", "/internal/v1/stats/users?from=" + today + "&to=" + today, null, "Authorization", reader);
+        assertThat(ranged.status()).isEqualTo(200);
+        assertThat(ranged.body().get("asOf")).isEqualTo(today);
+        assertThat(((Number) ranged.body().get("newUsers")).longValue()).isPositive();
+
+        assertThat(call("GET", "/internal/v1/stats/users?from=" + today, null, "Authorization", reader).status()).isEqualTo(400);
+        Resp inverted = call("GET", "/internal/v1/stats/users?from=2026-02-01&to=2026-01-01", null, "Authorization", reader);
+        assertThat(inverted.status()).isEqualTo(400);
+        assertThat(inverted.body().get("code")).isEqualTo("INVALID_RANGE");
+        assertThat(call("GET", "/internal/v1/stats/users?from=2024-01-01&to=2026-01-01", null, "Authorization", reader).status())
+                .isEqualTo(400);
+
+        assertThat(call("GET", "/internal/v1/stats/users", null).status()).isEqualTo(401);
+        Resp userToken = activeUser("stats-nope@umsa.bo");
+        assertThat(call("GET", "/internal/v1/stats/users", null, "Authorization",
+                bearer((String) userToken.body().get("accessToken"))).status()).isEqualTo(403);
+    }
+
     private int count(String id) {
         return jdbc.sql("SELECT count(*) FROM outbox WHERE id = CAST(:id AS uuid)").param("id", id).query(Integer.class).single();
     }

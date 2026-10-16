@@ -46,7 +46,7 @@ Variables: ver `.env.example` (validadas al arrancar por `config/StartupValidato
 
 Dev **7001**. Público (Traefik): `/api/v1/auth/**`, `/api/v1/users/**`,
 `/api/v1/universities`, `/.well-known/jwks.json`. Interno: `/internal/v1/users`,
-`/internal/v1/universities`. Health: `/health/live`, `/health/ready` (Actuator mapeado).
+`/internal/v1/universities`, `/internal/v1/stats/users` (`getUserStats`: conteos agregados sin PII; MCP `get_user_stats`; `INVALID_RANGE` si falta from/to, from>to o >366 días). Health: `/health/live`, `/health/ready` (Actuator mapeado).
 
 ## Contratos
 

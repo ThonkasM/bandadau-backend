@@ -5,6 +5,7 @@ import com.bandadau.identity.adapter.in.web.dto.Responses.PageResponse;
 import com.bandadau.identity.adapter.in.web.dto.Responses.UniversityResponse;
 import com.bandadau.identity.adapter.in.web.dto.UserResponse;
 import com.bandadau.identity.adapter.in.web.dto.Responses.McpTokenStatusResponse;
+import com.bandadau.identity.application.port.in.GetUserStatsUseCase;
 import com.bandadau.identity.application.port.in.ManageMcpTokensUseCase;
 import com.bandadau.identity.application.port.in.ManageUniversitiesUseCase;
 import com.bandadau.identity.application.port.in.ManageUsersUseCase;
@@ -15,7 +16,10 @@ import com.bandadau.identity.domain.model.University;
 import com.bandadau.identity.domain.model.UserStatus;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -29,18 +33,43 @@ public class InternalController {
     private final ManageUsersUseCase users;
     private final ManageUniversitiesUseCase universities;
     private final ManageMcpTokensUseCase mcpTokens;
+    private final GetUserStatsUseCase userStats;
 
     public InternalController(ManageUsersUseCase users, ManageUniversitiesUseCase universities,
-                              ManageMcpTokensUseCase mcpTokens) {
+                              ManageMcpTokensUseCase mcpTokens, GetUserStatsUseCase userStats) {
         this.users = users;
         this.universities = universities;
         this.mcpTokens = mcpTokens;
+        this.userStats = userStats;
     }
 
     /** insights-service asks this before accepting a token with aud=mcp (revocation, UC-22). */
     @GetMapping("/mcp-tokens/{tokenId}")
     public McpTokenStatusResponse getMcpTokenStatus(@PathVariable UUID tokenId) {
         return McpTokenStatusResponse.from(mcpTokens.status(tokenId));
+    }
+
+    /** getUserStats: aggregated counts only (no emails or names). */
+    @GetMapping("/stats/users")
+    public Map<String, Object> getUserStats(
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to) {
+        GetUserStatsUseCase.UserStats s = userStats.get(from, to);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("asOf", s.asOf().toString());
+        out.put("totalUsers", s.totalUsers());
+        out.put("activeUsers", s.activeUsers());
+        out.put("suspendedUsers", s.suspendedUsers());
+        out.put("newUsers", s.newUsers());
+        out.put("byStatus", s.byStatus());
+        out.put("byUniversity", s.byUniversity().stream().map(u -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("universityId", u.universityId().toString());
+            m.put("name", u.name());
+            m.put("users", u.users());
+            return m;
+        }).toList());
+        return out;
     }
 
     @GetMapping("/users")
