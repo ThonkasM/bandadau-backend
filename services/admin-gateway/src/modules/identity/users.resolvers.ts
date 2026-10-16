@@ -14,6 +14,8 @@ export function usersResolvers(service: UsersService) {
       updateUserRoles: (_: unknown, a: { input: { userId: string; roles: string[] } }, ctx: GatewayContext) => service.updateRoles(ctx, a.input),
       suspendUser: (_: unknown, a: { input: { userId: string; reason: string } }, ctx: GatewayContext) => service.suspend(ctx, a.input),
       reactivateUser: (_: unknown, a: { input: { userId: string } }, ctx: GatewayContext) => service.reactivate(ctx, a.input),
+      createMcpToken: (_: unknown, a: { input?: { label?: string | null } | null }, ctx: GatewayContext) => service.createMcpToken(ctx, a.input),
+      revokeMcpToken: (_: unknown, a: { id: string }, ctx: GatewayContext) => service.revokeMcpToken(ctx, a.id),
       createUniversity: (_: unknown, a: { input: { name: string; allowedDomains: string[] } }, ctx: GatewayContext) => service.createUniversity(ctx, a.input),
       updateUniversity: (_: unknown, a: { input: { id: string; name?: string | null; allowedDomains?: string[] | null; enabled?: boolean | null } }, ctx: GatewayContext) => service.updateUniversity(ctx, a.input),
     },

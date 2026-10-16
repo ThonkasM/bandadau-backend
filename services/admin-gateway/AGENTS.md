@@ -77,7 +77,7 @@ Dev **7010**. `/graphql` (POST + WebSocket `graphql-ws`; token en cabecera `Auth
 | `serviceHealth` | `GET /health/ready` de identity, social, media, events, wallet, ticketing y notification + management API de RabbitMQ |
 | `moderationQueueChanged` | RabbitMQ: `media.asset.#`, `social.content.reported.v1`, `social.post.hidden.v1` |
 | Fase 2 (insights-service): `reports`, `report` (internal, token de servicio), `alerts`, `agentRuns` (detalle), `requestReport`, `acknowledgeAlert` (REST público con el token del ADMIN), `runMonitoringNow` (internal), subscriptions `alertRaised` y `reportReady` (cola de instancia con `bandada.insights.alert.raised.v1` y `report.ready.v1`) | `modules/insights` |
-| `createMcpToken`, `revokeMcpToken` (identity aún no emite tokens MCP) | error `extensions.code = FEATURE_DISABLED` |
+| `createMcpToken`, `revokeMcpToken` (solo ADMIN) | identity `POST /api/v1/auth/mcp-tokens` y `DELETE /api/v1/auth/mcp-tokens/{id}` con el **token del ADMIN** (sin Idempotency-Key: el contrato exime la creación; revocar es idempotente por naturaleza). Errores de identity → `errors[]` por `code` |
 
 ## Reglas específicas y gotchas
 
@@ -93,8 +93,7 @@ Dev **7010**. `/graphql` (POST + WebSocket `graphql-ws`; token en cabecera `Auth
   `suspendUser` sobre uno mismo → `CANNOT_SUSPEND_SELF` (se devuelven en `errors[]` sin llamar a identity, con el texto según `Accept-Language`);
   `moderateMedia` traduce el `MEDIA_NOT_FLAGGED` de media-service a `ALREADY_MODERATED`.
 - **Divergencias de contrato** (reportar en bandadau-docs): (1) no existe `GET /internal/v1/users/{id}` en el OpenAPI de identity (`user(id)` = `ids=<id>`);
-  (2) `suspendUser.until` se **retiró** del contrato (GraphQL 1.3.0): identity no tiene suspensión temporal; (3) `User.suspendedAt/suspensionReason` solo se
-  muestran si identity los incluye en `/internal/v1/users` (hoy no: pendiente en identity; tras suspender en la misma petición se rellenan con el motivo enviado);
+  (2) `suspendUser.until` se **retiró** del contrato (GraphQL 1.3.0): identity no tiene suspensión temporal; (3) `User.suspendedAt/suspensionReason` se pasan tal como los devuelve identity (contrato identity 1.4.0; resuelto);
   (4) `event(id)` usa `GET /internal/v1/events/{id}` y `ContentReport.post` usa `GET /internal/v1/posts/{id}` (D-6, token de servicio; los reportes de `COMMENT` devuelven
   `post = null` porque no hay endpoint interno de comentario); (5) `Registration.saga` busca la SAGA en las 500 más recientes (10 páginas de 50; no hay filtro
   `registrationId` en `listSagas`); (6) el AGENTS original hablaba de `X-Acting-User`: el contrato usa `X-Actor-Id`; (7) la cola `admin-gateway.subscriptions.<id>` no figura aún

@@ -50,7 +50,7 @@ export class UsersService {
     try {
       const user = await this.ds.identity.updateStatus(ctx.call, input.userId, 'SUSPENDED', input.reason);
       ctx.loaders.users.clear(input.userId).prime(input.userId, user);
-      return { user: { ...user, suspensionReason: input.reason, suspendedAt: user.updatedAt }, errors: [] };
+      return { user, errors: [] };
     } catch (e) {
       return { user: null, errors: toUserErrors(e) };
     }
@@ -63,6 +63,24 @@ export class UsersService {
       return { user, errors: [] };
     } catch (e) {
       return { user: null, errors: toUserErrors(e) };
+    }
+  }
+
+  async createMcpToken(ctx: GatewayContext, input?: { label?: string | null } | null) {
+    try {
+      return { token: await this.ds.identity.createMcpToken(ctx.call, ctx.bearer as string, input?.label), errors: [] };
+    } catch (e) {
+      return { token: null, errors: toUserErrors(e) };
+    }
+  }
+
+  /** Idempotent: identity answers 204 for an already revoked or expired token. */
+  async revokeMcpToken(ctx: GatewayContext, id: string) {
+    try {
+      await this.ds.identity.revokeMcpToken(ctx.call, ctx.bearer as string, id);
+      return { revokedId: id, errors: [] };
+    } catch (e) {
+      return { revokedId: null, errors: toUserErrors(e) };
     }
   }
 

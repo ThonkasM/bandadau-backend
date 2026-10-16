@@ -8,7 +8,6 @@ import { GraphqlServer } from './graphql/graphql-server';
 import { RabbitEventBus } from './graphql/pubsub/rabbit-event-bus';
 import { dashboardResolvers } from './modules/dashboard/dashboard.resolvers';
 import { DashboardService } from './modules/dashboard/dashboard.service';
-import { disabledResolvers } from './modules/disabled/disabled.resolvers';
 import { eventsResolvers } from './modules/events/events.resolvers';
 import { EventsService } from './modules/events/events.service';
 import { ServiceHealthService } from './modules/health/service-health.service';
@@ -107,7 +106,6 @@ export class AppModule {
       {
         Query: { serviceHealth: () => new ServiceHealthService(config, overrides.fetch).report() },
       },
-      disabledResolvers as never,
     );
     const server = new GraphqlServer({ config, dataSources, resolvers });
 

@@ -1,5 +1,5 @@
 import type { ServiceHttp } from '../common/http-client';
-import type { CallContext, IdentityUniversity, IdentityUser, Page } from './types';
+import type { CallContext, IdentityMcpToken, IdentityUniversity, IdentityUser, Page } from './types';
 
 const opts = (ctx: CallContext) => ({ actorId: ctx.actorId, locale: ctx.locale, correlationId: ctx.correlationId });
 
@@ -21,6 +21,16 @@ export class IdentityClient {
 
   updateStatus(ctx: CallContext, userId: string, status: 'ACTIVE' | 'SUSPENDED', reason?: string) {
     return this.http.request<IdentityUser>('PATCH', `/internal/v1/users/${userId}/status`, { ...opts(ctx), body: { status, ...(reason ? { reason } : {}) } });
+  }
+
+  /** Public `POST /api/v1/auth/mcp-tokens` with the ADMIN's own token (UC-22). Exempt from Idempotency-Key in the contract: every call issues a new token. */
+  createMcpToken(ctx: CallContext, bearer: string, label?: string | null) {
+    return this.http.request<IdentityMcpToken>('POST', '/api/v1/auth/mcp-tokens', { ...opts(ctx), bearer, body: label ? { label } : {} });
+  }
+
+  /** Public `DELETE /api/v1/auth/mcp-tokens/{id}` (204; revoking twice is also 204). */
+  async revokeMcpToken(ctx: CallContext, bearer: string, id: string): Promise<void> {
+    await this.http.request<void>('DELETE', `/api/v1/auth/mcp-tokens/${id}`, { ...opts(ctx), bearer });
   }
 
   /** Public `/api/v1/universities` (no auth), all pages. */

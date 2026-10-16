@@ -21,6 +21,19 @@ export interface IdentityUser {
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Identity contract 1.4.0: present while the account is suspended. */
+  suspendedAt?: string | null;
+  suspensionReason?: string | null;
+}
+
+export interface IdentityMcpToken {
+  id: string;
+  accessToken: string;
+  audience: string;
+  scopes: string[];
+  label: string | null;
+  expiresAt: string;
+  createdAt: string;
 }
 
 export interface IdentityUniversity {

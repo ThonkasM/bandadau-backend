@@ -123,10 +123,16 @@ describe('mutations', () => {
   });
 
   it('suspendUser is open to MODERATOR; moderateMedia and resolveContentReport call the owning services', async () => {
-    h.mock('PATCH', `/identity/internal/v1/users/${ids.u1}/status`, (c) => ({ body: user(ids.u1, { status: (c.body as { status: string }).status }) }));
-    const s = await h.gql(`mutation { suspendUser(input:{userId:"${ids.u1}", reason:"spam repetido"}) { user { status suspensionReason } errors { code } } }`, { token: moderator });
-    expect(s.body.data.suspendUser.user).toEqual({ status: 'SUSPENDED', suspensionReason: 'spam repetido' });
+    h.mock('PATCH', `/identity/internal/v1/users/${ids.u1}/status`, (c) => {
+      const b = c.body as { status: string; reason?: string };
+      return { body: user(ids.u1, b.status === 'SUSPENDED' ? { status: 'SUSPENDED', suspendedAt: '2026-10-15T12:00:00Z', suspensionReason: b.reason } : { status: 'ACTIVE' }) };
+    });
+    const s = await h.gql(`mutation { suspendUser(input:{userId:"${ids.u1}", reason:"spam repetido"}) { user { status suspendedAt suspensionReason } errors { code } } }`, { token: moderator });
+    expect(s.body.data.suspendUser.user).toEqual({ status: 'SUSPENDED', suspendedAt: '2026-10-15T12:00:00Z', suspensionReason: 'spam repetido' });
+    const back = await h.gql(`mutation { reactivateUser(input:{userId:"${ids.u1}"}) { user { status suspendedAt suspensionReason } errors { code } } }`, { token: admin });
+    expect(back.body.data.reactivateUser.user).toEqual({ status: 'ACTIVE', suspendedAt: null, suspensionReason: null });
     expect(h.callsTo('/identity/internal/v1/users')[0]!.body).toEqual({ status: 'SUSPENDED', reason: 'spam repetido' });
+    expect(h.callsTo('/identity/internal/v1/users')[1]!.body).toEqual({ status: 'ACTIVE' });
 
     const mediaId = '0192a3b4-0000-7000-8000-000000000500';
     h.mock('POST', `/media/internal/v1/media/${mediaId}/decision`, () => ({ body: { id: mediaId, ownerId: ids.u1, kind: 'IMAGE', purpose: 'POST', status: 'REJECTED', url: null, thumbnailUrl: null, tags: [], ocrText: null, createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z', moderationResults: [] } }));
@@ -179,11 +185,34 @@ describe('mutations', () => {
   });
 });
 
-describe('fields still disabled', () => {
-  it('MCP token mutations answer FEATURE_DISABLED (identity does not issue them yet); insights fields are live (see insights.int-spec.ts)', async () => {
-    expect(code(await h.gql('mutation { createMcpToken { errors { code } } }', { token: admin }))).toBe('FEATURE_DISABLED');
-    expect(code(await h.gql('mutation { revokeMcpToken(id:"0192a3b4-0000-7000-8000-000000000700") { errors { code } } }', { token: admin }))).toBe('FEATURE_DISABLED');
+describe('MCP tokens (UC-22)', () => {
+  const tokenId = '0192a3b4-0000-7000-8000-000000000700';
+
+  it('createMcpToken forwards the ADMIN token to identity and returns the token once; only ADMIN may call it', async () => {
+    h.mock('POST', '/identity/api/v1/auth/mcp-tokens', () => ({
+      status: 201,
+      body: { id: tokenId, accessToken: 'jwt.mcp.token', tokenType: 'Bearer', audience: 'mcp', scopes: ['mcp:tools'], label: 'Claude Desktop', expiresIn: 28800, expiresAt: '2026-10-15T20:00:00Z', createdAt: '2026-10-15T12:00:00Z' },
+    }));
+    const res = await h.gql('mutation { createMcpToken(input:{label:"Claude Desktop"}) { token { id accessToken audience scopes label expiresAt } errors { code } } }', { token: admin });
+    expect(res.body.errors).toBeUndefined();
+    expect(res.body.data.createMcpToken).toEqual({ token: { id: tokenId, accessToken: 'jwt.mcp.token', audience: 'mcp', scopes: ['mcp:tools'], label: 'Claude Desktop', expiresAt: '2026-10-15T20:00:00Z' }, errors: [] });
+    const call = h.callsTo('/identity/api/v1/auth/mcp-tokens')[0]!;
+    expect(call.headers.authorization).toBe(`Bearer ${admin}`);
+    expect(call.body).toEqual({ label: 'Claude Desktop' });
     expect(code(await h.gql('mutation { createMcpToken { errors { code } } }', { token: moderator }))).toBe('FORBIDDEN');
+  });
+
+  it('revokeMcpToken returns the id, maps a missing token to errors[] by code and is ADMIN only', async () => {
+    h.mock('DELETE', `/identity/api/v1/auth/mcp-tokens/${tokenId}`, () => ({ status: 204 }));
+    const ok = await h.gql(`mutation { revokeMcpToken(id:"${tokenId}") { revokedId errors { code } } }`, { token: admin });
+    expect(ok.body.data.revokeMcpToken).toEqual({ revokedId: tokenId, errors: [] });
+    expect(h.callsTo('/identity/api/v1/auth/mcp-tokens/')[0]!.headers.authorization).toBe(`Bearer ${admin}`);
+
+    const other = '0192a3b4-0000-7000-8000-000000000701';
+    h.mock('DELETE', `/identity/api/v1/auth/mcp-tokens/${other}`, () => ({ status: 404, body: { code: 'NOT_FOUND', detail: 'Token no encontrado', status: 404 } }));
+    const missing = await h.gql(`mutation { revokeMcpToken(id:"${other}") { revokedId errors { code message } } }`, { token: admin });
+    expect(missing.body.data.revokeMcpToken).toEqual({ revokedId: null, errors: [{ code: 'NOT_FOUND', message: 'Token no encontrado' }] });
+    expect(code(await h.gql(`mutation { revokeMcpToken(id:"${tokenId}") { errors { code } } }`, { token: moderator }))).toBe('FORBIDDEN');
   });
 });
 
