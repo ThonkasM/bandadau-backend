@@ -1,4 +1,4 @@
-import { type AgentRun, type AgentRunStep } from '../../entities/agent-run';
+import { type AgentRun, type AgentRunStep, noteEngine } from '../../entities/agent-run';
 import { AgentStepLimitError, LlmRefusalError } from '../../entities/errors/domain-errors';
 import type { Locale } from '../../entities/locale';
 import { type AgentGuardrails, assertBudget, costMicros } from '../../entities/policies/agent-guardrails';
@@ -68,7 +68,9 @@ export class AgentLoop {
         maxTokens: 4096,
         effort: 'medium',
         meta: input.meta,
+        sessionId: run.id,
       });
+      noteEngine(run, res);
       run.llmSteps += 1;
       run.llmProvider = this.llm.provider;
       run.model = res.model;

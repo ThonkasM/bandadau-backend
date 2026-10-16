@@ -8,12 +8,14 @@ import { ALERT_KINDS, ALERT_SEVERITIES, ALERT_SOURCES, ALERT_STATUSES, type Aler
 import { AgentRunNotFoundError, DomainError, ReportNotFoundError } from '../../../entities/errors/domain-errors';
 import { isLocale, type Locale } from '../../../entities/locale';
 import { REPORT_STATUSES, type ReportStatus } from '../../../entities/report';
+import { isReportEngine } from '../../../entities/report-engine';
 import { GetPlatformKpisUseCase } from '../../../use-cases/metrics/metrics';
 import { AcknowledgeAlertUseCase, ListAlertsUseCase, RaiseAlertUseCase } from '../../../use-cases/monitoring/alerts';
 import { RunMonitoringUseCase } from '../../../use-cases/monitoring/run-monitoring';
 import { PLATFORM_DATA, type PlatformDataPort } from '../../../use-cases/ports/platform-data.port';
 import { AGENT_RUN_REPOSITORY, type AgentRunRepository } from '../../../use-cases/ports/repositories';
 import { GetReportUseCase, ListReportsUseCase } from '../../../use-cases/reports/get-report';
+import { ListReportEnginesUseCase } from '../../../use-cases/reports/list-report-engines';
 import { RequestReportUseCase } from '../../../use-cases/reports/request-report';
 import { toAgentRunDto, toAgentRunSummaryDto, toAlertDto, toReportDto, toReportSummaryDto } from '../../presenters/dto';
 import { localeOf, type RequestLike, toHttpProblem, validationProblem } from './http-problem';
@@ -33,15 +35,16 @@ const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[], f
   return v as T;
 };
 
-function parseReportRequest(body: unknown, req: RequestLike): { question: string; locale?: string } {
+function parseReportRequest(body: unknown, req: RequestLike): { question: string; locale?: string; engine?: string } {
   const b = (body ?? {}) as Record<string, unknown>;
   const errors: FieldError[] = [];
-  for (const k of Object.keys(b)) if (k !== 'question' && k !== 'locale') errors.push({ field: `/${k}`, code: 'UNKNOWN_FIELD', message: `unexpected field ${k}` });
+  for (const k of Object.keys(b)) if (k !== 'question' && k !== 'locale' && k !== 'engine') errors.push({ field: `/${k}`, code: 'UNKNOWN_FIELD', message: `unexpected field ${k}` });
   if (typeof b.question !== 'string') errors.push({ field: '/question', code: 'REQUIRED', message: 'question is required' });
   else if (b.question.trim().length < 10 || b.question.length > 1000) errors.push({ field: '/question', code: 'OUT_OF_RANGE', message: 'question must have between 10 and 1000 characters' });
   if (b.locale !== undefined && !isLocale(b.locale)) errors.push({ field: '/locale', code: 'INVALID_VALUE', message: 'locale must be es or en' });
+  if (b.engine !== undefined && !isReportEngine(b.engine)) errors.push({ field: '/engine', code: 'INVALID_VALUE', message: 'engine must be AUTO, OPENCODE, OLLAMA or STUB' });
   if (errors.length > 0) throw validationProblem(req, errors);
-  return { question: b.question as string, locale: b.locale as string | undefined };
+  return { question: b.question as string, locale: b.locale as string | undefined, engine: b.engine as string | undefined };
 }
 
 const accepted = (res: Response, r: { reportId: string; agentRunId: string; status: string; locale: Locale }, base: string) => {
@@ -56,6 +59,7 @@ export class InsightsController {
   constructor(
     @Inject(RequestReportUseCase) private readonly requestReport: RequestReportUseCase,
     @Inject(GetReportUseCase) private readonly getReport: GetReportUseCase,
+    @Inject(ListReportEnginesUseCase) private readonly listEngines: ListReportEnginesUseCase,
     @Inject(ListAlertsUseCase) private readonly listAlerts: ListAlertsUseCase,
     @Inject(AcknowledgeAlertUseCase) private readonly ack: AcknowledgeAlertUseCase,
     @Inject(AGENT_RUN_REPOSITORY) private readonly runs: AgentRunRepository,
@@ -68,8 +72,18 @@ export class InsightsController {
   async requestReportEndpoint(@Body() body: unknown, @CurrentUser() user: AuthPrincipal, @Req() req: RequestLike, @Res({ passthrough: true }) res: Response) {
     const input = parseReportRequest(body, req);
     try {
-      const r = await this.requestReport.execute({ question: input.question, locale: input.locale ?? user.locale, requestedBy: user.sub, defaultLocale: localeOf(req) });
+      const r = await this.requestReport.execute({ question: input.question, locale: input.locale ?? user.locale, engine: input.engine, requestedBy: user.sub, defaultLocale: localeOf(req) });
       return accepted(res, r, '/api/v1/insights/reports');
+    } catch (error) {
+      throw toHttpProblem(error, req);
+    }
+  }
+
+  @Get('reports/engines')
+  @Roles('ADMIN')
+  async listReportEngines(@Req() req: RequestLike) {
+    try {
+      return { items: await this.listEngines.execute() };
     } catch (error) {
       throw toHttpProblem(error, req);
     }
@@ -175,7 +189,7 @@ export class InternalController {
   async requestReportInternal(@Body() body: unknown, @Req() req: RequestLike & { user?: AuthPrincipal }, @Res({ passthrough: true }) res: Response) {
     const input = parseReportRequest(body, req);
     try {
-      const r = await this.requestReport.execute({ question: input.question, locale: input.locale, requestedBy: this.actorOf(req), defaultLocale: localeOf(req) });
+      const r = await this.requestReport.execute({ question: input.question, locale: input.locale, engine: input.engine, requestedBy: this.actorOf(req), defaultLocale: localeOf(req) });
       return accepted(res, r, '/internal/v1/reports');
     } catch (error) {
       throw toHttpProblem(error, req);

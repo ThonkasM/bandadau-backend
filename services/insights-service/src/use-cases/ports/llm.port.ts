@@ -1,4 +1,5 @@
 import type { Locale } from '../../entities/locale';
+import type { ConcreteEngine, EngineMode } from '../../entities/report-engine';
 
 export type LlmTier = 'smart' | 'fast';
 export interface LlmToolDef {
@@ -31,12 +32,17 @@ export interface LlmRequest {
   effort?: 'low' | 'medium' | 'high';
   /** Plain facts about the request for deterministic doubles (question, today); real providers ignore them. */
   meta?: { question?: string; today?: string };
+  /** AgentRun id: external providers that ask for a stable session id (OpenCode `x-opencode-session`) use it. */
+  sessionId?: string;
 }
 export interface LlmResponse {
   stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | 'other';
   content: LlmBlock[];
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
   model: string;
+  /** Set by the engine chain: who really answered and in which mode (ADR-0022). */
+  engine?: ConcreteEngine;
+  mode?: EngineMode;
 }
 export interface LlmPort {
   readonly provider: string;

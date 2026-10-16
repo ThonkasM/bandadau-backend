@@ -1,6 +1,7 @@
 import type { Locale } from '../../entities/locale';
 import { buildChartSpec, type ChartIntent } from '../../entities/policies/chart-spec';
 import type { GeneratedReport, ReportDataset } from '../../entities/report';
+import type { ConcreteEngine } from '../../entities/report-engine';
 import { reportReadyMessage } from '../messages';
 import type { AppLogger,AudioStorage, Clock } from '../ports/misc';
 import type { ReportRepository } from '../ports/repositories';
@@ -52,6 +53,9 @@ export interface FinalizeInput {
   chartSpec?: Record<string, unknown> | null;
   audioScript?: string | null;
   fidelityWarning?: boolean;
+  /** Real engine and model that wrote it (ADR-0022). */
+  engine?: ConcreteEngine | null;
+  model?: string | null;
 }
 
 /** Last phase shared by the ReportAgent and the external `generate_report` tool: chart, hash, audio, READY, outbox event. */
@@ -72,6 +76,8 @@ export class ReportFinalizer {
       dataset: input.dataset,
       datasetHash: input.dataset ? hashDataset(input.dataset) : null,
       fidelityWarning: input.fidelityWarning ?? false,
+      ...(input.engine !== undefined ? { engine: input.engine } : {}),
+      ...(input.model !== undefined ? { model: input.model } : {}),
       chart: input.chartSpec ? stripChartStyling(input.chartSpec) : input.chartIntent && input.dataset ? buildChartSpec(input.chartIntent, input.dataset) : null,
     };
     const script = input.audioScript?.trim();

@@ -1,13 +1,14 @@
 import { collectNumericLeaves, extractNumbers } from '../../../entities/policies/number-fidelity';
 import type { LlmBlock, LlmPort, LlmRequest, LlmResponse } from '../../../use-cases/ports/llm.port';
 import { textOf } from './common';
-import { type OllamaAdapter } from './ollama.adapter';
 import { composeFromData, isGeneralQuestion, StubLlmAdapter, toolData, toolInput } from './stub.adapter';
 
 type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export interface OllamaHybridOptions {
-  ollama: OllamaAdapter;
+  /** The model client: Ollama or any other `LlmPort` (OpenAI-compatible in HYBRID mode). */
+  ollama: LlmPort;
+  provider?: string;
   /** `stub`: an Ollama error/timeout/invalid output falls back to the deterministic result. `none`: errors propagate (the report fails). */
   fallback: 'stub' | 'none';
   model: string;
@@ -123,10 +124,12 @@ export function isAcceptableRewrite(answer: string, draft: string, data: Record<
  * The reported `model` tells who wrote the answer: `<ollama model>` or `<ollama model>+stub-fallback`/`stub-deterministic-1`.
  */
 export class OllamaHybridAdapter implements LlmPort {
-  readonly provider = 'ollama';
+  readonly provider: string;
   private readonly stub = new StubLlmAdapter();
 
-  constructor(private readonly o: OllamaHybridOptions) {}
+  constructor(private readonly o: OllamaHybridOptions) {
+    this.provider = o.provider ?? 'ollama';
+  }
 
   async complete(req: LlmRequest): Promise<LlmResponse> {
     if (req.purpose === 'collect') return this.collect(req);

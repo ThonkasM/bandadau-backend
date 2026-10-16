@@ -206,6 +206,8 @@ export interface InsightsReportDto {
   requestedBy: string;
   agentRunId: string | null;
   hasAudio: boolean;
+  engine?: 'OPENCODE' | 'OLLAMA' | 'STUB' | null;
+  model?: string | null;
   createdAt: string;
   completedAt: string | null;
   markdown?: string | null;
@@ -214,6 +216,15 @@ export interface InsightsReportDto {
   audioUrl?: string | null;
   audioDurationSeconds?: number | null;
   failureReason?: string | null;
+}
+
+export interface InsightsReportEngineDto {
+  engine: 'OPENCODE' | 'OLLAMA' | 'STUB';
+  label: string;
+  model: string | null;
+  available: boolean;
+  external: boolean;
+  mode: 'AGENT' | 'HYBRID' | 'DETERMINISTIC';
 }
 
 export interface InsightsAlertDto {
@@ -238,6 +249,8 @@ export interface InsightsAgentRunDto {
   trigger: string;
   status: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'ABORTED';
   model?: string | null;
+  engine?: 'OPENCODE' | 'OLLAMA' | 'STUB' | null;
+  engineMode?: 'AGENT' | 'HYBRID' | 'DETERMINISTIC' | null;
   toolsUsed: string[];
   tokens?: { input: number; output: number; total: number };
   reportId: string | null;

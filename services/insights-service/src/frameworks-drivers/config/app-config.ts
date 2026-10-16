@@ -1,7 +1,12 @@
 import type { Locale } from '../../entities/locale';
 import { DEFAULT_THRESHOLDS, type MonitoringThresholds } from '../../entities/policies/monitoring-rules';
+import { DEFAULT_ALLOWED_MODELS } from '../../interface-adapters/gateways/llm/model-policy';
 
 export type LlmProviderName = 'stub' | 'claude' | 'ollama';
+/** Ids of the engine chain (`LLM_PROVIDERS`): `opencode` (OpenAI-compatible), `claude` (Anthropic Messages), `ollama`, `stub`. */
+export type EngineProviderName = 'opencode' | 'claude' | 'ollama' | 'stub';
+export const ENGINE_PROVIDERS: readonly EngineProviderName[] = ['opencode', 'claude', 'ollama', 'stub'];
+export type OpencodeMode = 'agent' | 'hybrid';
 export type TtsProviderName = 'none' | 'piper' | 'polly';
 
 export interface AppConfig {
@@ -36,6 +41,20 @@ export interface AppConfig {
   services: Record<string, string>;
   prometheusUrl: string | undefined;
   llmProvider: LlmProviderName;
+  /** Preference order of the AUTO engine (ADR-0022). Derived from `LLM_PROVIDER` when `LLM_PROVIDERS` is not set. */
+  llmProviders: EngineProviderName[];
+  /** The deterministic stub closes the AUTO chain (`LLM_FALLBACK` is not `none`). */
+  llmStubLastResort: boolean;
+  opencodeApiKey: string | undefined;
+  opencodeBaseUrl: string;
+  opencodeChatPath: string;
+  opencodeModel: string;
+  opencodeMode: OpencodeMode;
+  opencodeAllowedModels: string[];
+  opencodeTimeoutMs: number;
+  /** Identifies this client to OpenCode (`User-Agent`). */
+  clientUserAgent: string;
+  anthropicBaseUrl: string | undefined;
   anthropicApiKey: string | undefined;
   llmModel: string;
   llmModelCheap: string;
@@ -67,6 +86,7 @@ export interface AppConfig {
   defaultLocale: Locale;
 }
 
+const SERVICE_VERSION = '0.1.0';
 type Env = Record<string, string | undefined>;
 const bool = (v: string | undefined, d: boolean) => (v === undefined || v === '' ? d : ['1', 'true', 'yes'].includes(v.toLowerCase()));
 const num = (v: string | undefined, d: number) => {
@@ -89,6 +109,8 @@ const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[], d
 
 export function loadConfig(env: Env = process.env): AppConfig {
   const port = num(env.PORT, 7008);
+  const provider = oneOf(env.LLM_PROVIDER, ['stub', 'claude', 'ollama'] as const, 'stub', 'LLM_PROVIDER');
+  const providers: EngineProviderName[] = env.LLM_PROVIDERS ? list(env.LLM_PROVIDERS).map((p) => oneOf(p, ENGINE_PROVIDERS, 'stub', 'LLM_PROVIDERS')) : [provider];
   const locale = oneOf(env.DEFAULT_LOCALE, ['es', 'en'] as const, 'es', 'DEFAULT_LOCALE');
   return {
     port,
@@ -131,7 +153,18 @@ export function loadConfig(env: Env = process.env): AppConfig {
       'admin-gateway': env.ADMIN_GATEWAY_URL ?? 'http://localhost:7010',
     },
     prometheusUrl: env.PROMETHEUS_URL || undefined,
-    llmProvider: oneOf(env.LLM_PROVIDER, ['stub', 'claude', 'ollama'] as const, 'stub', 'LLM_PROVIDER'),
+    llmProvider: provider,
+    llmProviders: providers,
+    llmStubLastResort: env.LLM_FALLBACK ? env.LLM_FALLBACK === 'stub' : !(env.LLM_PROVIDERS === undefined && provider === 'claude'),
+    opencodeApiKey: env.OPENCODE_API_KEY || undefined,
+    opencodeBaseUrl: (env.OPENCODE_BASE_URL || 'https://opencode.ai/inference/go').replace(/\/+$/, ''),
+    opencodeChatPath: env.OPENCODE_CHAT_PATH || '/openai/v1/chat/completions',
+    opencodeModel: env.OPENCODE_MODEL || 'deepseek-v4.1-flash',
+    opencodeMode: oneOf(env.OPENCODE_MODE, ['agent', 'hybrid'] as const, 'agent', 'OPENCODE_MODE'),
+    opencodeAllowedModels: env.OPENCODE_ALLOWED_MODELS ? list(env.OPENCODE_ALLOWED_MODELS) : [...DEFAULT_ALLOWED_MODELS],
+    opencodeTimeoutMs: num(env.OPENCODE_TIMEOUT_MS, 60_000),
+    clientUserAgent: env.LLM_CLIENT_USER_AGENT || `bandada-insights/${SERVICE_VERSION}`,
+    anthropicBaseUrl: env.ANTHROPIC_BASE_URL || undefined,
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     llmModel: env.LLM_MODEL ?? env.ANTHROPIC_MODEL ?? 'claude-haiku-5-5',
     llmModelCheap: env.LLM_MODEL_CHEAP ?? env.ANTHROPIC_MODEL ?? 'claude-haiku-5-5',

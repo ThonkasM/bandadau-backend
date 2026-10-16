@@ -1,10 +1,11 @@
-import { type AgentRun, type StopReason } from '../../entities/agent-run';
+import { type AgentRun, noteEngine, type StopReason } from '../../entities/agent-run';
 import { AgentStepLimitError, DomainError, LlmRefusalError } from '../../entities/errors/domain-errors';
 import { REPORT_GUARDRAILS } from '../../entities/policies/agent-guardrails';
 import { checkNumberFidelity, maskPersonalData } from '../../entities/policies/number-fidelity';
 import type { GeneratedReport } from '../../entities/report';
 import { AgentLoop } from '../agents/agent-loop';
 import type { LlmMessage, LlmPort, LlmPricing } from '../ports/llm.port';
+import type { LlmEnginesPort } from '../ports/llm-engines.port';
 import type { McpClientFactory } from '../ports/mcp-client.port';
 import type { AppLogger, Clock, PromptCatalog } from '../ports/misc';
 import type { AgentRunRepository, ReportRepository } from '../ports/repositories';
@@ -33,8 +34,6 @@ export interface ReportAgentOptions {
 
 /** ReportAgent (UC-19): plan + collect through MCP tools -> dataset -> markdown -> chart intent -> audio script -> TTS -> READY. */
 export class GenerateReportUseCase {
-  private readonly loop: AgentLoop;
-
   constructor(
     private readonly llm: LlmPort,
     private readonly mcp: McpClientFactory,
@@ -44,11 +43,11 @@ export class GenerateReportUseCase {
     private readonly prompts: PromptCatalog,
     private readonly clock: Clock,
     private readonly logger: AppLogger,
-    pricing: LlmPricing,
+    private readonly pricing: LlmPricing,
     private readonly options: ReportAgentOptions,
-  ) {
-    this.loop = new AgentLoop(llm, runs, clock, pricing);
-  }
+    /** When present, the engine asked for by each report (`requestedEngine`) is resolved here; otherwise `llm` serves every report. */
+    private readonly engines?: LlmEnginesPort,
+  ) {}
 
   async execute(reportId: string): Promise<void> {
     const report = await this.reports.findById(reportId);
@@ -59,6 +58,8 @@ export class GenerateReportUseCase {
       return;
     }
     const run = stored.run;
+    const llm = this.engines ? this.engines.select(report.requestedEngine ?? 'AUTO', report.locale) : this.llm;
+    const loop = new AgentLoop(llm, this.runs, this.clock, this.pricing);
     const running: GeneratedReport = { ...report, status: 'RUNNING' };
     await this.reports.save(running);
     let mcp: Awaited<ReturnType<McpClientFactory['create']>> | undefined;
@@ -73,7 +74,7 @@ export class GenerateReportUseCase {
         content: [{ type: 'text', text: report.locale === 'es' ? `Fecha de hoy: ${today} (UTC).\nPregunta: "${report.question}"` : `Today's date: ${today} (UTC).\nQuestion: "${report.question}"` }],
       };
       const meta = { question: report.question, today };
-      const { messages, toolResults } = await this.loop.run({
+      const { messages, toolResults } = await loop.run({
         run,
         locale: report.locale,
         system,
@@ -84,17 +85,17 @@ export class GenerateReportUseCase {
         meta,
       });
 
-      let composed = await this.compose(run, report, system, messages, meta);
+      let composed = await this.compose(llm, run, report, system, messages, meta);
       let fidelity = checkNumberFidelity(composed.markdown, composed.dataset, toolResults);
       let warning = false;
       if (!fidelity.ok) {
         this.logger.warn('number fidelity failed; asking for one correction', { reportId, unsupported: fidelity.unsupported.slice(0, 5) });
-        composed = await this.compose(run, report, system, messages, meta, fidelity.unsupported);
+        composed = await this.compose(llm, run, report, system, messages, meta, fidelity.unsupported);
         fidelity = checkNumberFidelity(composed.markdown, composed.dataset, toolResults);
         warning = !fidelity.ok;
       }
       composed.markdown = maskPersonalData(composed.markdown);
-      const audioScript = await this.audioScript(run, report, composed.markdown);
+      const audioScript = await this.audioScript(llm, run, report, composed.markdown);
       await this.finalizer.finish(report, {
         title: composed.title,
         markdown: composed.markdown,
@@ -102,6 +103,8 @@ export class GenerateReportUseCase {
         chartIntent: composed.chartIntent,
         audioScript,
         fidelityWarning: warning,
+        engine: run.engine ?? null,
+        model: run.model,
       });
       await this.closeRun(run, 'SUCCEEDED', 'COMPLETED');
     } catch (error) {
@@ -116,7 +119,7 @@ export class GenerateReportUseCase {
     }
   }
 
-  private async compose(run: AgentRun, report: GeneratedReport, system: string, history: LlmMessage[], meta: { question?: string; today?: string }, unsupported?: number[]): Promise<ComposedReport> {
+  private async compose(llm: LlmPort, run: AgentRun, report: GeneratedReport, system: string, history: LlmMessage[], meta: { question?: string; today?: string }, unsupported?: number[]): Promise<ComposedReport> {
     const ask = unsupported
       ? report.locale === 'es'
         ? `Corrige el reporte: estas cifras no están respaldadas por los datos: ${unsupported.join(', ')}. Usa solo cifras presentes en los resultados de las herramientas.`
@@ -124,7 +127,7 @@ export class GenerateReportUseCase {
       : this.prompts.compose(report.locale, report.question);
     const messages: LlmMessage[] = [...history, { role: 'user', content: [{ type: 'text', text: ask }] }];
     for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await this.llm.complete({
+      const res = await llm.complete({
         tier: 'smart',
         purpose: unsupported ? 'correct' : 'compose',
         locale: report.locale,
@@ -134,8 +137,10 @@ export class GenerateReportUseCase {
         responseSchema: COMPOSE_SCHEMA,
         effort: 'low',
         meta,
+        sessionId: run.id,
       });
       this.account(run, res.usage, res.model);
+      noteEngine(run, res);
       if (res.stopReason === 'refusal') throw new LlmRefusalError();
       const text = res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n');
       try {
@@ -147,9 +152,9 @@ export class GenerateReportUseCase {
     throw new DomainError('LLM_INVALID_OUTPUT', 'The model did not return a valid report');
   }
 
-  private async audioScript(run: AgentRun, report: GeneratedReport, markdown: string): Promise<string | null> {
+  private async audioScript(llm: LlmPort, run: AgentRun, report: GeneratedReport, markdown: string): Promise<string | null> {
     try {
-      const res = await this.llm.complete({
+      const res = await llm.complete({
         tier: 'fast',
         purpose: 'audio_script',
         locale: report.locale,
@@ -158,6 +163,7 @@ export class GenerateReportUseCase {
         maxTokens: 700,
         effort: 'low',
         meta: { question: report.question },
+        sessionId: run.id,
       });
       this.account(run, res.usage, run.model ?? res.model); // keep the model that wrote the answer (the audio script must not overwrite it)
       const text = res.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join(' ').trim();

@@ -37,6 +37,8 @@ export function toReportSummaryDto(r: GeneratedReport) {
     requestedBy: r.requestedBy,
     agentRunId: r.agentRunId || null,
     hasAudio: r.audioKey !== null,
+    engine: r.engine ?? null,
+    model: r.model ?? null,
     createdAt: r.createdAt,
     completedAt: r.completedAt,
   };
@@ -65,6 +67,8 @@ export function toAgentRunSummaryDto(r: AgentRun) {
     trigger: r.trigger,
     status: r.status,
     model: r.model ?? undefined,
+    engine: r.engine ?? undefined,
+    engineMode: r.engineMode ?? undefined,
     toolsUsed: r.toolsUsed,
     tokens: { input: r.tokens.input, output: r.tokens.output, total: r.tokens.input + r.tokens.output },
     reportId: r.reportId,

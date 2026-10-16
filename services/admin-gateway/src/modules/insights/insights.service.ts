@@ -44,9 +44,13 @@ export class InsightsService {
     return this.ds.insights.getAgentRun(ctx.call, id, bearer(ctx)).catch(notFound);
   }
 
-  async requestReport(ctx: Ctx, args: { question: string; locale?: string | null }) {
+  async reportEngines(ctx: Ctx) {
+    return (await this.ds.insights.listReportEngines(ctx.call, bearer(ctx))).items;
+  }
+
+  async requestReport(ctx: Ctx, args: { question: string; locale?: string | null; engine?: string | null }) {
     try {
-      const accepted = await this.ds.insights.requestReport(ctx.call, bearer(ctx), { question: args.question, ...(args.locale ? { locale: args.locale } : {}) }, randomUUID());
+      const accepted = await this.ds.insights.requestReport(ctx.call, bearer(ctx), { question: args.question, ...(args.locale ? { locale: args.locale } : {}), ...(args.engine && args.engine !== 'AUTO' ? { engine: args.engine } : {}) }, randomUUID());
       return { report: await this.ds.insights.getReportAsUser(ctx.call, accepted.reportId, bearer(ctx)), errors: [] };
     } catch (e) {
       return { report: null, errors: toUserErrors(e) };

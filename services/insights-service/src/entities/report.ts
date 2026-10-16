@@ -1,4 +1,5 @@
 import type { Locale } from './locale';
+import type { ConcreteEngine, ReportEngine } from './report-engine';
 
 export const REPORT_STATUSES = ['PENDING', 'RUNNING', 'READY', 'FAILED'] as const;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
@@ -23,6 +24,11 @@ export interface GeneratedReport {
   status: ReportStatus;
   requestedBy: string;
   agentRunId: string | null;
+  /** What the admin asked for (AUTO by default). Reports stored before ADR-0022 have no value. */
+  requestedEngine?: ReportEngine;
+  /** Real engine and model that wrote the report (set when it finishes). */
+  engine?: ConcreteEngine | null;
+  model?: string | null;
   markdown: string | null;
   dataset: ReportDataset | null;
   datasetHash: string | null;
@@ -37,7 +43,7 @@ export interface GeneratedReport {
   completedAt: string | null;
 }
 
-export function newReport(i: { id: string; question: string; locale: Locale; requestedBy: string; agentRunId: string; now: string }): GeneratedReport {
+export function newReport(i: { id: string; question: string; locale: Locale; requestedBy: string; agentRunId: string; now: string; engine?: ReportEngine }): GeneratedReport {
   return {
     id: i.id,
     title: null,
@@ -46,6 +52,9 @@ export function newReport(i: { id: string; question: string; locale: Locale; req
     status: 'PENDING',
     requestedBy: i.requestedBy,
     agentRunId: i.agentRunId,
+    requestedEngine: i.engine ?? 'AUTO',
+    engine: null,
+    model: null,
     markdown: null,
     dataset: null,
     datasetHash: null,

@@ -1,5 +1,5 @@
 import type { ServiceHttp } from '../common/http-client';
-import type { CallContext, InsightsAgentRunDto, InsightsAlertDto, InsightsReportDto, Page } from './types';
+import type { CallContext, InsightsAgentRunDto, InsightsAlertDto, InsightsReportDto, InsightsReportEngineDto, Page } from './types';
 
 const opts = (ctx: CallContext) => ({ actorId: ctx.actorId, locale: ctx.locale, correlationId: ctx.correlationId });
 
@@ -32,8 +32,13 @@ export class InsightsClient {
   }
 
   /** Public `requestReport` as the ADMIN (so `requestedBy` is the user and `locale` defaults to theirs). */
-  requestReport(ctx: CallContext, bearer: string, body: { question: string; locale?: string }, idempotencyKey: string) {
+  requestReport(ctx: CallContext, bearer: string, body: { question: string; locale?: string; engine?: string }, idempotencyKey: string) {
     return this.http.request<{ reportId: string; agentRunId: string; status: string; locale: string }>('POST', '/api/v1/insights/reports', { ...opts(ctx), bearer, body, idempotencyKey });
+  }
+
+  /** Public `listReportEngines` (ADMIN): engines with availability, never keys. */
+  listReportEngines(ctx: CallContext, bearer: string) {
+    return this.http.request<{ items: InsightsReportEngineDto[] }>('GET', '/api/v1/insights/reports/engines', { ...opts(ctx), bearer });
   }
 
   getReportAsUser(ctx: CallContext, id: string, bearer: string) {

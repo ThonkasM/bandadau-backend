@@ -8,10 +8,15 @@ export interface AnthropicOptions {
   model: string;
   modelCheap: string;
   timeoutMs?: number;
+  /** `ANTHROPIC_BASE_URL`: e.g. `https://opencode.ai/inference/go/anthropic` to use OpenCode Go's Anthropic Messages endpoint (claude-haiku-5-5). */
+  baseUrl?: string | undefined;
+  /** Sent as `User-Agent` + `x-opencode-session` when a custom base URL is used (OpenCode asks every client to identify itself). */
+  userAgent?: string | undefined;
   /** Tests inject a fake client; production builds the official SDK client. */
   client?: Pick<Anthropic, 'messages'>;
 }
 
+const SESSION_PREFIX = Math.random().toString(16).slice(2, 10);
 type Stop = LlmResponse['stopReason'];
 const STOP: Record<string, Stop> = { end_turn: 'end_turn', tool_use: 'tool_use', max_tokens: 'max_tokens', refusal: 'refusal', stop_sequence: 'end_turn' };
 
@@ -26,7 +31,7 @@ export class AnthropicAdapter implements LlmPort {
 
   constructor(private readonly o: AnthropicOptions) {
     this.enabled = Boolean(o.client ?? o.apiKey);
-    this.client = o.client ?? (o.apiKey ? new Anthropic({ apiKey: o.apiKey, timeout: o.timeoutMs ?? 60_000, maxRetries: 2 }) : undefined);
+    this.client = o.client ?? (o.apiKey ? new Anthropic({ apiKey: o.apiKey, timeout: o.timeoutMs ?? 60_000, maxRetries: 2, ...(o.baseUrl ? { baseURL: o.baseUrl } : {}) }) : undefined);
   }
 
   async complete(req: LlmRequest): Promise<LlmResponse> {
@@ -48,7 +53,8 @@ export class AnthropicAdapter implements LlmPort {
     if (withTools) params.tools = (req.tools ?? []).map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
     let res: Anthropic.Message;
     try {
-      res = (await this.client.messages.create(params as unknown as Anthropic.MessageCreateParamsNonStreaming)) as Anthropic.Message;
+      const headers: Record<string, string> | undefined = this.o.baseUrl ? { ...(this.o.userAgent ? { 'User-Agent': this.o.userAgent } : {}), 'x-opencode-session': `bandada-${SESSION_PREFIX}-${req.sessionId ?? 'process'}` } : undefined;
+      res = (await this.client.messages.create(params as unknown as Anthropic.MessageCreateParamsNonStreaming, headers ? { headers } : undefined)) as Anthropic.Message;
     } catch (error) {
       return asUnavailable(error);
     }

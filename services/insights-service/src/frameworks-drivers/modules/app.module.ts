@@ -21,9 +21,11 @@ import { DynamoAgentRunRepository, DynamoAlertRepository, DynamoLock, DynamoMetr
 import { DynamoStore } from '../../interface-adapters/gateways/dynamo/dynamo-store';
 import { PlatformDataGateway } from '../../interface-adapters/gateways/internal-api/platform-data.gateway';
 import { AnthropicAdapter } from '../../interface-adapters/gateways/llm/anthropic.adapter';
-import { FallbackLlmAdapter } from '../../interface-adapters/gateways/llm/fallback.adapter';
+import { ollamaProbe, opencodeProbe } from '../../interface-adapters/gateways/llm/engine-probes';
+import { type EngineEntry, LlmEngineRegistry } from '../../interface-adapters/gateways/llm/engine-registry';
 import { OllamaAdapter } from '../../interface-adapters/gateways/llm/ollama.adapter';
 import { OllamaHybridAdapter } from '../../interface-adapters/gateways/llm/ollama-hybrid.adapter';
+import { OpenAiCompatibleAdapter } from '../../interface-adapters/gateways/llm/openai-compatible.adapter';
 import { StubLlmAdapter } from '../../interface-adapters/gateways/llm/stub.adapter';
 import { LoopbackMcpClientFactory } from '../../interface-adapters/gateways/mcp/loopback-mcp-client';
 import { S3AudioStorage } from '../../interface-adapters/gateways/s3/s3-audio.storage';
@@ -36,6 +38,7 @@ import { DetectAnomaliesUseCase,GetPlatformKpisUseCase } from '../../use-cases/m
 import { AcknowledgeAlertUseCase, ListAlertsUseCase, RaiseAlertUseCase } from '../../use-cases/monitoring/alerts';
 import { RunMonitoringUseCase } from '../../use-cases/monitoring/run-monitoring';
 import { LLM_PORT, type LlmPort, type LlmPricing } from '../../use-cases/ports/llm.port';
+import { LLM_ENGINES, type LlmEnginesPort } from '../../use-cases/ports/llm-engines.port';
 import { MCP_CLIENT_FACTORY, type McpClientFactory } from '../../use-cases/ports/mcp-client.port';
 import { ANOMALY_DETECTOR, APP_LOGGER, type AppLogger, AUDIO_STORAGE, type AudioStorage, CLOCK, type Clock, ID_GENERATOR, JOB_RUNNER, PROMPT_CATALOG } from '../../use-cases/ports/misc';
 import { PLATFORM_DATA, type PlatformDataPort } from '../../use-cases/ports/platform-data.port';
@@ -43,6 +46,7 @@ import { AGENT_RUN_REPOSITORY, ALERT_REPOSITORY, LOCK_PORT, METRIC_REPOSITORY, R
 import { TTS_PORT, type TtsPort } from '../../use-cases/ports/tts.port';
 import { GenerateReportUseCase } from '../../use-cases/reports/generate-report';
 import { GetReportUseCase, ListReportsUseCase } from '../../use-cases/reports/get-report';
+import { ListReportEnginesUseCase } from '../../use-cases/reports/list-report-engines';
 import { ReportFinalizer } from '../../use-cases/reports/report-finalizer';
 import { RequestReportUseCase } from '../../use-cases/reports/request-report';
 import { SaveExternalReportUseCase } from '../../use-cases/reports/save-external-report';
@@ -70,18 +74,62 @@ export interface AppOverrides {
 
 const MONITOR_RUN_STALE_MS = 3 * 60_000;
 
-export function buildLlm(config: AppConfig, logger: AppLogger): { llm: LlmPort; pricing: LlmPricing } {
-  if (config.llmProvider === 'claude') {
-    const adapter = new AnthropicAdapter({ apiKey: config.anthropicApiKey, model: config.llmModel, modelCheap: config.llmModelCheap });
-    if (adapter.enabled) return { llm: config.llmFallback === 'stub' ? new FallbackLlmAdapter(adapter, new StubLlmAdapter()) : adapter, pricing: { inPerM: config.llmPriceInPerM, outPerM: config.llmPriceOutPerM } };
-    logger.warn('LLM_PROVIDER=claude but ANTHROPIC_API_KEY is not set: Anthropic adapter disabled, using the deterministic stub');
-  } else if (config.llmProvider === 'ollama') {
-    const ollama = new OllamaAdapter({ url: config.ollamaUrl, model: config.ollamaModel, timeoutMs: config.ollamaTimeoutMs });
-    // small local model: deterministic planner + verified answer wording (ollama-hybrid.adapter.ts); fallback `stub` unless LLM_FALLBACK=none
-    const fallback = config.llmFallbackExplicit ? config.llmFallback : 'stub';
-    return { llm: new OllamaHybridAdapter({ ollama, fallback, model: config.ollamaModel }), pricing: { inPerM: 0, outPerM: 0 } };
+const ZERO_PRICE: LlmPricing = { inPerM: 0, outPerM: 0 };
+
+/**
+ * Builds every report engine (OpenCode Go / Anthropic, Ollama, deterministic stub) and the registry that picks and chains them (ADR-0022).
+ * All three engines always exist (so `reportEngines` lists them with their availability); `LLM_PROVIDERS` only decides what AUTO uses.
+ */
+export function buildEngines(config: AppConfig, logger: AppLogger): { registry: LlmEngineRegistry; pricing: LlmPricing } {
+  const entries: EngineEntry[] = [];
+
+  const alt = ['/openai/v1/chat/completions', '/v1/chat/completions'].filter((p) => p !== config.opencodeChatPath);
+  const openai = new OpenAiCompatibleAdapter({
+    apiKey: config.opencodeApiKey,
+    baseUrl: config.opencodeBaseUrl,
+    chatPath: config.opencodeChatPath,
+    altChatPaths: alt,
+    model: config.opencodeModel,
+    allowedModels: config.opencodeAllowedModels,
+    userAgent: config.clientUserAgent,
+    timeoutMs: config.opencodeTimeoutMs,
+  });
+  if (openai.disabledReason && config.opencodeApiKey) logger.error(`OpenCode engine disabled: ${openai.disabledReason}`);
+  const hybrid = config.opencodeMode === 'hybrid';
+  entries.push({
+    id: 'opencode',
+    engine: 'OPENCODE',
+    label: 'OpenCode Go',
+    model: config.opencodeModel,
+    mode: hybrid ? 'HYBRID' : 'AGENT',
+    external: true,
+    // HYBRID: deterministic planner, the model only words the answer; errors propagate so the chain can fall to the next engine
+    adapter: hybrid ? new OllamaHybridAdapter({ ollama: openai, provider: 'opencode', fallback: 'none', model: config.opencodeModel }) : openai,
+    probe: opencodeProbe({ hasKey: Boolean(config.opencodeApiKey), disabledReason: openai.disabledReason, baseUrl: config.opencodeBaseUrl }),
+  });
+
+  if (config.llmProviders.includes('claude')) {
+    const anthropic = new AnthropicAdapter({ apiKey: config.anthropicApiKey, model: config.llmModel, modelCheap: config.llmModelCheap, baseUrl: config.anthropicBaseUrl, userAgent: config.clientUserAgent });
+    entries.push({ id: 'claude', engine: 'OPENCODE', label: 'Claude (Anthropic API)', model: config.llmModel, mode: 'AGENT', external: true, adapter: anthropic, probe: async () => anthropic.enabled });
   }
-  return { llm: new StubLlmAdapter(), pricing: { inPerM: 0, outPerM: 0 } };
+
+  const ollama = new OllamaAdapter({ url: config.ollamaUrl, model: config.ollamaModel, timeoutMs: config.ollamaTimeoutMs });
+  entries.push({
+    id: 'ollama',
+    engine: 'OLLAMA',
+    label: 'Ollama local',
+    model: config.ollamaModel,
+    mode: 'HYBRID',
+    external: false,
+    // small local model: deterministic planner + verified answer wording (ollama-hybrid.adapter.ts); fallback `stub` unless LLM_FALLBACK=none
+    adapter: new OllamaHybridAdapter({ ollama, fallback: config.llmFallbackExplicit ? config.llmFallback : 'stub', model: config.ollamaModel }),
+    probe: ollamaProbe({ url: config.ollamaUrl, model: config.ollamaModel }),
+  });
+  entries.push({ id: 'stub', engine: 'STUB', label: 'Determinista', model: null, mode: 'DETERMINISTIC', external: false, adapter: new StubLlmAdapter(), probe: async () => true });
+
+  const registry = new LlmEngineRegistry(entries, { order: config.llmProviders, stubLastResort: config.llmStubLastResort, logger });
+  const priced = config.llmProviders[0] === 'claude' ? { inPerM: config.llmPriceInPerM, outPerM: config.llmPriceOutPerM } : ZERO_PRICE;
+  return { registry, pricing: priced };
 }
 
 export function buildTts(config: AppConfig, logger: AppLogger): TtsPort {
@@ -132,7 +180,10 @@ export class AppModule {
       clientSecret: config.serviceClientSecret,
       scopes: ['internal:read', 'internal:write'],
     });
-    const { llm, pricing } = overrides.llm ? { llm: overrides.llm, pricing: { inPerM: 0, outPerM: 0 } } : buildLlm(config, logger);
+    const built = overrides.llm ? null : buildEngines(config, logger);
+    const llm: LlmPort = overrides.llm ?? (built as NonNullable<typeof built>).registry.auto();
+    const engines: LlmEnginesPort | undefined = built?.registry;
+    const pricing: LlmPricing = built?.pricing ?? ZERO_PRICE;
     const tts = overrides.tts ?? buildTts(config, logger);
     const clock: Clock = overrides.clock ?? { now: () => new Date() };
     const ids = { next: () => uuidv7() };
@@ -158,7 +209,7 @@ export class AppModule {
     const detector = new StatAnomalyDetector();
 
     const finalizer = new ReportFinalizer(reports, tts, storage, clock, logger);
-    const generate = new GenerateReportUseCase(llm, mcpClients, reports, runs, finalizer, promptCatalog, clock, logger, pricing, { maxSteps: config.agentMaxSteps, maxTokens: config.agentMaxTokens });
+    const generate = new GenerateReportUseCase(llm, mcpClients, reports, runs, finalizer, promptCatalog, clock, logger, pricing, { maxSteps: config.agentMaxSteps, maxTokens: config.agentMaxTokens }, engines);
     const requestReport = new RequestReportUseCase(reports, runs, clock, ids, jobs, promptCatalog, logger, (id) => generate.execute(id));
     const raiseAlert = new RaiseAlertUseCase(alerts, clock, ids);
     const kpis = new GetPlatformKpisUseCase(metrics, alerts);
@@ -225,6 +276,8 @@ export class AppModule {
         { provide: CLOCK, useValue: clock },
         { provide: ID_GENERATOR, useValue: ids },
         { provide: LLM_PORT, useValue: llm },
+        { provide: LLM_ENGINES, useValue: engines ?? null },
+        { provide: ListReportEnginesUseCase, useValue: new ListReportEnginesUseCase(engines ?? { select: () => llm, list: () => Promise.resolve([]) }) },
         { provide: TTS_PORT, useValue: tts },
         { provide: AUDIO_STORAGE, useValue: storage },
         { provide: PLATFORM_DATA, useValue: platformData },

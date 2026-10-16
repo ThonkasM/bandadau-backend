@@ -21,11 +21,12 @@ export function insightsResolvers(service: InsightsService) {
     Query: {
       reports: (_: unknown, args: never, ctx: Ctx) => service.reports(ctx, args),
       report: (_: unknown, args: { id: string }, ctx: Ctx) => service.report(ctx, args.id),
+      reportEngines: (_: unknown, __: unknown, ctx: Ctx) => service.reportEngines(ctx),
       alerts: (_: unknown, args: never, ctx: Ctx) => service.alerts(ctx, args),
       agentRuns: (_: unknown, args: never, ctx: Ctx) => service.agentRuns(ctx, args),
     },
     Mutation: {
-      requestReport: (_: unknown, args: { question: string; locale?: string }, ctx: Ctx) => service.requestReport(ctx, args),
+      requestReport: (_: unknown, args: { question: string; locale?: string; engine?: string }, ctx: Ctx) => service.requestReport(ctx, args),
       acknowledgeAlert: (_: unknown, args: { id: string }, ctx: Ctx) => service.acknowledgeAlert(ctx, args.id),
       runMonitoringNow: (_: unknown, __: unknown, ctx: Ctx) => service.runMonitoringNow(ctx),
     },
@@ -39,6 +40,8 @@ export function insightsResolvers(service: InsightsService) {
       audioUrl: async (r: InsightsReportDto, _: unknown, ctx: Ctx) => (await full(r, ctx)).audioUrl ?? null,
       audioDurationSeconds: async (r: InsightsReportDto, _: unknown, ctx: Ctx) => (await full(r, ctx)).audioDurationSeconds ?? null,
       failureReason: (r: InsightsReportDto) => r.failureReason ?? null,
+      engine: (r: InsightsReportDto) => r.engine ?? null,
+      model: (r: InsightsReportDto) => r.model ?? null,
     },
     Alert: {
       details: (a: InsightsAlertDto) => a.details ?? null,
@@ -49,6 +52,8 @@ export function insightsResolvers(service: InsightsService) {
     },
     AgentRun: {
       model: (r: InsightsAgentRunDto) => r.model ?? null,
+      engine: (r: InsightsAgentRunDto) => r.engine ?? null,
+      engineMode: (r: InsightsAgentRunDto) => r.engineMode ?? null,
       tokens: (r: InsightsAgentRunDto) => r.tokens ?? null,
       steps: async (r: InsightsAgentRunDto, _: unknown, ctx: Ctx) => r.steps ?? (await service.agentRun(ctx, r.id))?.steps ?? [],
       report: (r: InsightsAgentRunDto, _: unknown, ctx: Ctx) => (r.reportId ? service.report(ctx, r.reportId) : null),

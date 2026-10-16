@@ -1,4 +1,5 @@
 import type { Locale } from './locale';
+import type { ConcreteEngine, EngineMode } from './report-engine';
 
 export type AgentKind = 'MONITORING' | 'REPORT' | 'EXTERNAL_MCP';
 export type AgentTrigger = 'SCHEDULE' | 'MANUAL' | 'REPORT_REQUEST';
@@ -35,6 +36,9 @@ export interface AgentRun {
   status: AgentRunStatus;
   llmProvider: string | null;
   model: string | null;
+  /** Real engine and mode (AGENT|HYBRID|DETERMINISTIC) that served the run (ADR-0022). */
+  engine?: ConcreteEngine | null;
+  engineMode?: EngineMode | null;
   promptVersion: string | null;
   toolsUsed: string[];
   stepCount: number;
@@ -69,6 +73,8 @@ export function newAgentRun(i: {
     status: 'RUNNING',
     llmProvider: null,
     model: null,
+    engine: null,
+    engineMode: null,
     promptVersion: i.promptVersion ?? null,
     toolsUsed: [],
     stepCount: 0,
@@ -85,3 +91,11 @@ export function newAgentRun(i: {
 }
 
 export const totalTokens = (t: TokenUsage): number => t.input + t.output;
+
+/** Records who really answered an LLM call (engine and mode set by the engine chain; ADR-0022). */
+export function noteEngine(run: AgentRun, res: { engine?: ConcreteEngine | undefined; mode?: EngineMode | undefined }): void {
+  if (res.engine) {
+    run.engine = res.engine;
+    run.engineMode = res.mode ?? null;
+  }
+}

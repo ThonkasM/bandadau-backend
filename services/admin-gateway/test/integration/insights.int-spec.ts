@@ -110,6 +110,33 @@ describe('insights mutations (phase 2)', () => {
     expect(call.body).toEqual({ question: 'How many registrations last month?', locale: 'en' });
   });
 
+  it('requestReport(engine): forwards an explicit engine (AUTO is omitted) and exposes GeneratedReport.engine/model', async () => {
+    h.mock('POST', '/insights/api/v1/insights/reports', () => ({ status: 202, body: { reportId: U(1), agentRunId: U(50), status: 'PENDING', locale: 'es', engine: 'STUB' } }));
+    h.mock('GET', `/insights/api/v1/insights/reports/${U(1)}`, () => ({ body: { ...report(U(1), { status: 'READY' }), engine: 'OPENCODE', model: 'deepseek-v4.1-flash' } }));
+    const res = await h.gql('mutation { requestReport(question: "¿Quién compró el último ticket?", engine: OPENCODE) { report { id engine model } errors { code } } }', { token: admin });
+    expect(res.body.errors).toBeUndefined();
+    expect(res.body.data.requestReport.report).toEqual({ id: U(1), engine: 'OPENCODE', model: 'deepseek-v4.1-flash' });
+    expect(h.callsTo('/insights/api/v1/insights/reports').find((c) => c.method === 'POST')!.body).toEqual({ question: '¿Quién compró el último ticket?', engine: 'OPENCODE' });
+    await h.gql('mutation { requestReport(question: "¿Quién compró el último ticket?") { errors { code } } }', { token: admin });
+    expect(h.callsTo('/insights/api/v1/insights/reports').filter((c) => c.method === 'POST').at(-1)!.body).toEqual({ question: '¿Quién compró el último ticket?' });
+  });
+
+  it('reportEngines: ADMIN only, lists engines with availability', async () => {
+    const items = [
+      { engine: 'OPENCODE', label: 'OpenCode Go', model: 'deepseek-v4.1-flash', available: false, external: true, mode: 'AGENT' },
+      { engine: 'STUB', label: 'Determinista', model: null, available: true, external: false, mode: 'DETERMINISTIC' },
+    ];
+    h.mock('GET', '/insights/api/v1/insights/reports/engines', () => ({ body: { items } }));
+    const q = '{ reportEngines { engine label model available external mode } }';
+    const res = await h.gql(q, { token: admin });
+    expect(res.body.errors).toBeUndefined();
+    expect(res.body.data.reportEngines).toEqual(items);
+    expect(h.callsTo('/insights/api/v1/insights/reports/engines')[0]!.headers.authorization).toBe(`Bearer ${admin}`);
+    const anon = await h.gql(q);
+    expect(anon.body.data?.reportEngines ?? null).toBeNull();
+    expect(anon.body.errors?.[0]?.extensions?.code).toMatch(/UNAUTHENTICATED|FORBIDDEN/);
+  });
+
   it('requestReport: business errors of insights come back as UserError (VALIDATION_FAILED with field)', async () => {
     h.mock('POST', '/insights/api/v1/insights/reports', () => ({ status: 422, body: { code: 'VALIDATION_FAILED', status: 422, title: 'Solicitud no válida', detail: 'Revisa los campos enviados.', errors: [{ field: '/question', code: 'OUT_OF_RANGE', message: 'question must have between 10 and 1000 characters' }] } }));
     const res = await h.gql('mutation { requestReport(question: "corta") { report { id } errors { code message field } } }', { token: admin });
