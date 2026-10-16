@@ -110,3 +110,11 @@ concurrencia de cupo (N inscripciones, cupo C → exactamente C).
 
 El relay corre cada `OUTBOX_RELAY_INTERVAL` (`PT1S` por defecto) y `OutboxRelay.purge()` borra cada `OUTBOX_PURGE_INTERVAL` (`PT1H`) las filas
 publicadas con más de `OUTBOX_RETENTION` (`P7D`); nunca toca las pendientes. Índice parcial `idx_outbox_published` (migración V2).
+
+## Observabilidad (OTLP)
+
+`spring-boot-starter-opentelemetry` (Micrometer Tracing + registro OTLP). `OtelEnvironmentPostProcessor` traduce `OTEL_SDK_DISABLED` / `OTEL_EXPORTER_OTLP_ENDPOINT` (los mismos del stack) a
+`management.otlp.metrics.export.*` y `management.opentelemetry.tracing.export.otlp.*`: **sin endpoint o con `OTEL_SDK_DISABLED=true` no se exporta nada** (valor por defecto; tests y arranque no necesitan colector).
+Con endpoint (`http://lgtm:4318`) exporta trazas (`/v1/traces`) y métricas (`/v1/metrics`, cada 15 s, unidad base segundos). `OTEL_SERVICE_NAME`/`OTEL_RESOURCE_ATTRIBUTES` los lee Spring Boot. Spring AMQP tiene
+`observation-enabled` (publicación y consumo), de modo que el contexto W3C viaja en las cabeceras de los mensajes de la SAGA. Métricas de negocio (`MicrometerSagaMetrics`, nombres que consumen el dashboard
+`bandada-saga` y la alerta `SagaCompensationRateHigh`): `saga_duration_seconds{saga_type,outcome}`, `saga_compensations_total{saga_type,step,reason}`, `saga_step_resends_total{step}`, `saga_compensation_stuck_total{saga_type}`.

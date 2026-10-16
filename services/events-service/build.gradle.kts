@@ -29,6 +29,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springframework.boot:spring-boot-starter-amqp")
+    implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
     implementation("io.github.resilience4j:resilience4j-circuitbreaker:2.4.0")
     runtimeOnly("org.postgresql:postgresql")
 

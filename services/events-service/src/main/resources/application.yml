@@ -22,12 +22,14 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+      observation-enabled: true       # propaga el trace context (traceparent) al publicar
     listener:
       simple:
         prefetch: 20
         concurrency: 2
         max-concurrency: 4
         missing-queues-fatal: false
+        observation-enabled: true     # propaga el trace context (traceparent) al consumir
   messages:
     basename: messages
     encoding: UTF-8
@@ -36,6 +38,16 @@ spring:
     banner-mode: off
 
 management:
+  # OTLP (R-2): OtelEnvironmentPostProcessor mapea OTEL_SDK_DISABLED / OTEL_EXPORTER_OTLP_ENDPOINT (url y enabled).
+  # Sin endpoint o con OTEL_SDK_DISABLED=true no se exporta nada.
+  otlp:
+    metrics:
+      export:
+        step: ${OTEL_METRIC_EXPORT_INTERVAL:15s}
+        base-time-unit: seconds       # saga_duration_seconds (los dashboards esperan segundos)
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACES_SAMPLER_ARG:1.0}
   endpoints:
     web:
       base-path: /
