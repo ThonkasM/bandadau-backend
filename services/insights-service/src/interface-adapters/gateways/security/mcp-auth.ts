@@ -1,5 +1,7 @@
 import { AuthError, type AuthPrincipal, createJwtVerifier, extractBearerToken, type JwtVerifier } from '@bandada/auth-ts';
 
+import type { McpTokenStatusChecker } from './mcp-token-status';
+
 export interface McpAuthOptions {
   jwksUrl: string;
   issuer: string;
@@ -8,6 +10,8 @@ export interface McpAuthOptions {
   /** Tests inject verifiers. */
   userVerifier?: JwtVerifier;
   serviceVerifier?: JwtVerifier;
+  /** Checks MCP tokens (aud `mcp`) against identity; without it they are accepted on signature alone (tests only). */
+  tokenStatus?: McpTokenStatusChecker;
 }
 
 /**
@@ -43,6 +47,20 @@ export class McpAuthenticator {
     const p = await this.user.verify(token);
     if (!p.roles.includes('ADMIN')) throw AuthError.forbidden('MCP requires the ADMIN role');
     if (p.aud.includes('mcp') && !p.aud.includes('bandada-admin') && !p.scopes.includes('mcp:tools')) throw AuthError.forbidden('Missing scope mcp:tools');
+    if (p.aud.includes('mcp') && !p.aud.includes('bandada-admin')) await this.assertMcpTokenActive(p);
     return p;
+  }
+
+  /** Revoked or unknown `jti` -> 401; identity down -> 503 (fail closed, only for MCP tokens). */
+  private async assertMcpTokenActive(p: AuthPrincipal): Promise<void> {
+    if (!this.o.tokenStatus) return;
+    if (!p.jti) throw AuthError.unauthorized('MCP token without jti');
+    let state;
+    try {
+      state = await this.o.tokenStatus.check(p.jti);
+    } catch (cause) {
+      throw new AuthError('SERVICE_UNAVAILABLE', 503, 'Cannot verify the MCP token right now', { cause });
+    }
+    if (state !== 'active') throw AuthError.unauthorized(state === 'revoked' ? 'MCP token revoked' : 'Unknown MCP token');
   }
 }

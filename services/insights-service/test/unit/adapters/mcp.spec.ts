@@ -11,6 +11,7 @@ import { MCP_TOOLS,McpServerFactory } from '../../../src/interface-adapters/cont
 import { StatAnomalyDetector } from '../../../src/interface-adapters/gateways/anomaly/stat-anomaly.detector';
 import { PlatformDataGateway } from '../../../src/interface-adapters/gateways/internal-api/platform-data.gateway';
 import { McpAuthenticator } from '../../../src/interface-adapters/gateways/security/mcp-auth';
+import { IdentityMcpTokenStatus, type McpTokenState } from '../../../src/interface-adapters/gateways/security/mcp-token-status';
 import { McpToolService } from '../../../src/use-cases/mcp-tools/mcp-tools';
 import { RateLimiter } from '../../../src/use-cases/mcp-tools/rate-limiter';
 import { DetectAnomaliesUseCase, GetPlatformKpisUseCase } from '../../../src/use-cases/metrics/metrics';
@@ -258,5 +259,51 @@ describe('McpAuthenticator (mcp.md section 3)', () => {
     await expect(auth(principal({})).authenticate(svc)).resolves.toMatchObject({ typ: 'service' });
     await expect(auth(principal({}), principal({ sub: 'n8n', typ: 'service', roles: [], aud: ['bandada-internal'] })).authenticate(svc)).rejects.toMatchObject({ status: 403 });
     await expect(auth(principal({}), principal({ sub: 'insights-service', typ: 'service', roles: [], aud: ['bandada-internal'], scopes: ['internal:read'] }), true).authenticate(svc)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('MCP token status (revocation, UC-22)', () => {
+  const token = `h.${Buffer.from(JSON.stringify({ typ: 'user' })).toString('base64url')}.s`;
+  const verifier = (p: AuthPrincipal): JwtVerifier => ({ verify: async () => p });
+  const mcpPrincipal = (extra: Partial<AuthPrincipal> = {}) => principal({ aud: ['mcp'], scopes: ['mcp:tools'], jti: 'jti-1', ...extra });
+  const auth = (p: AuthPrincipal, check: (jti: string) => Promise<McpTokenState>) =>
+    new McpAuthenticator({ jwksUrl: 'x', issuer: 'x', serviceClients: [], requireServiceScope: false, userVerifier: verifier(p), serviceVerifier: verifier(p), tokenStatus: { check } });
+
+  it('active passes; revoked and unknown give 401; identity down fails closed with 503', async () => {
+    await expect(auth(mcpPrincipal(), async () => 'active').authenticate(`Bearer ${token}`)).resolves.toBeDefined();
+    await expect(auth(mcpPrincipal(), async () => 'revoked').authenticate(`Bearer ${token}`)).rejects.toMatchObject({ status: 401 });
+    await expect(auth(mcpPrincipal(), async () => 'unknown').authenticate(`Bearer ${token}`)).rejects.toMatchObject({ status: 401 });
+    await expect(auth(mcpPrincipal(), async () => { throw new Error('down'); }).authenticate(`Bearer ${token}`)).rejects.toMatchObject({ status: 503 });
+    await expect(auth(mcpPrincipal({ jti: undefined }), async () => 'active').authenticate(`Bearer ${token}`)).rejects.toMatchObject({ status: 401 });
+  });
+  it('admin-panel tokens do not depend on identity being reachable for MCP token status', async () => {
+    const check = jest.fn(async () => 'revoked' as McpTokenState);
+    await expect(auth(principal({ aud: ['bandada-admin'] }), check).authenticate(`Bearer ${token}`)).resolves.toBeDefined();
+    expect(check).not.toHaveBeenCalled();
+  });
+  it('IdentityMcpTokenStatus caches verdicts, maps 404 to unknown and does not cache errors', async () => {
+    let now = 1000;
+    const calls: string[] = [];
+    let mode: 'ok' | 'revoked' | '404' | '500' = 'ok';
+    const f = (async (url: URL) => {
+      calls.push(String(url));
+      const body = JSON.stringify({ id: 'x', revoked: mode === 'revoked', expiresAt: '2099-01-01T00:00:00Z' });
+      if (mode === '404') return new Response('{}', { status: 404 });
+      if (mode === '500') return new Response('', { status: 500 });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+    const c = new IdentityMcpTokenStatus({ identityUrl: 'http://identity:7001', tokens: { authHeaders: async () => ({ Authorization: 'Bearer s' }), invalidate: () => undefined }, cacheTtlMs: 5000, now: () => now, fetch: f });
+    expect(await c.check('a')).toBe('active');
+    mode = 'revoked';
+    expect(await c.check('a')).toBe('active'); // cached
+    expect(calls).toEqual(['http://identity:7001/internal/v1/mcp-tokens/a']);
+    now += 6000;
+    expect(await c.check('a')).toBe('revoked');
+    mode = '404';
+    expect(await c.check('b')).toBe('unknown');
+    mode = '500';
+    await expect(c.check('c')).rejects.toBeDefined();
+    mode = 'ok';
+    expect(await c.check('c')).toBe('active');
   });
 });

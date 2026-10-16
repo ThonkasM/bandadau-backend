@@ -26,6 +26,7 @@ import { StubLlmAdapter } from '../../interface-adapters/gateways/llm/stub.adapt
 import { LoopbackMcpClientFactory } from '../../interface-adapters/gateways/mcp/loopback-mcp-client';
 import { S3AudioStorage } from '../../interface-adapters/gateways/s3/s3-audio.storage';
 import { McpAuthenticator } from '../../interface-adapters/gateways/security/mcp-auth';
+import { IdentityMcpTokenStatus, type McpTokenStatusChecker } from '../../interface-adapters/gateways/security/mcp-token-status';
 import { NullTts, PiperTts, PollyTts } from '../../interface-adapters/gateways/tts/tts.adapters';
 import { McpToolService } from '../../use-cases/mcp-tools/mcp-tools';
 import { RateLimiter } from '../../use-cases/mcp-tools/rate-limiter';
@@ -57,6 +58,7 @@ export interface AppOverrides {
   storage?: AudioStorage;
   platformData?: PlatformDataPort;
   mcpClientFactory?: McpClientFactory;
+  mcpTokenStatus?: McpTokenStatusChecker;
   /** false: no RabbitMQ (outbox rows stay pending), no consumer, no scheduler (unit/e2e tests). */
   background?: boolean;
   analyticsQueue?: string;
@@ -178,7 +180,7 @@ export class AppModule {
       reportLimiter: new RateLimiter(clock, config.mcpReportsPerHour, 3_600_000),
       strictOutput: overrides.strictMcpOutput ?? config.nodeEnv !== 'production',
     });
-    const mcpAuth = new McpAuthenticator({ jwksUrl: config.jwksUrl, issuer: config.jwtIssuer, serviceClients: config.mcpServiceClients, requireServiceScope: config.mcpRequireScope });
+    const mcpAuth = new McpAuthenticator({ jwksUrl: config.jwksUrl, issuer: config.jwtIssuer, serviceClients: config.mcpServiceClients, requireServiceScope: config.mcpRequireScope, tokenStatus: overrides.mcpTokenStatus ?? new IdentityMcpTokenStatus({ identityUrl: config.identityUrl, tokens }) });
     const allowedOrigins = [...new Set([...config.mcpAllowedOrigins, ...config.corsOrigins, 'http://localhost:6274', 'http://127.0.0.1:6274'])];
 
     const recoverUnfinished = async () => {

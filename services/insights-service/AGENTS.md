@@ -54,7 +54,7 @@ ReportAgent, MonitoringAgent, proyección `insights-service.analytics`, outbox, 
 - Datos: `REPORT#`, `AGENTRUN#` (+`STEP#`, TTL 30 d), `ALERT#`, `METRIC#<name>/<fecha>`, `LOCK#`, `OUTBOX#`; GSI1 (`REPORT`, `AGENTRUN`, `ALERT#<status>`).
 
 ### Divergencias de contrato (documentadas)
-- `/mcp` acepta el JWT de usuario ADMIN (aud `bandada-admin`) además del token MCP (`aud=mcp` + `mcp:tools`): identity aún no emite tokens MCP. `typ=mcp` no lo soporta `@bandada/auth-ts`.
+- `/mcp` acepta el JWT de usuario ADMIN (aud `bandada-admin`) y el token MCP de identity (`aud=mcp`, `typ=user`, `mcp:tools`, 8 h). Los tokens MCP se comprueban contra identity (`GET /internal/v1/mcp-tokens/{jti}`, caché 5 s): revocado/desconocido → 401; identity caído → 503 (falla cerrado solo para tokens MCP).
 - Los tokens de servicio de identity traen `internal:*`, no `mcp:tools`: se autoriza por `MCP_SERVICE_CLIENTS` (`MCP_REQUIRE_SCOPE=true` lo exige).
 - Capability `resources.subscribe=false` (modo sin estado). `GET`/`DELETE /mcp` responden 405.
 - `get_content_stats.reactionsByType` va en 0: social no desglosa reacciones por tipo.
