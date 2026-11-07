@@ -7,7 +7,7 @@ COPY settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY src ./src
 # SKIP_TESTS=false also runs unit + architecture tests (no Docker needed); integration tests: `make test-java`.
 ARG SKIP_TESTS=true
-RUN --mount=type=cache,target=/home/gradle/.gradle \
+RUN --mount=type=cache,target=/home/gradle/.gradle,sharing=locked \
     if [ "$SKIP_TESTS" = "true" ]; then gradle --no-daemon -q bootJar -x test; else gradle --no-daemon -q build; fi
 
 FROM eclipse-temurin:25-jre
