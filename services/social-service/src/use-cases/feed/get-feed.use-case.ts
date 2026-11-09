@@ -17,8 +17,8 @@ const MAX_FOLLOWING = 5000;
 const MAX_GROUPS = 500;
 
 /**
- * Phase 1 feed (UC-06 without the ML ranker): candidates from followed authors, own posts, my groups and popular posts of my
- * career within 72 h; visibility filter; score = recency; stable keyset cursor on (createdAt, id).
+ * Phase 1 feed (UC-06 without the ML ranker): candidates from followed authors, own posts, my groups and recent PUBLIC posts of my
+ * university (career when the profile has no university) within 72 h; visibility filter; score = recency; stable keyset cursor on (createdAt, id).
  */
 export class GetFeedUseCase {
   constructor(

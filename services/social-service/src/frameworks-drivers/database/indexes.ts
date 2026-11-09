@@ -9,6 +9,7 @@ export async function ensureIndexes(db: Db): Promise<void> {
     posts.createIndex({ authorId: 1, status: 1, createdAt: -1, _id: -1 }, { name: 'author_status_created' }),
     posts.createIndex({ groupId: 1, status: 1, createdAt: -1, _id: -1 }, { name: 'group_status_created' }),
     posts.createIndex({ authorCareer: 1, authorUniversityId: 1, status: 1, visibility: 1, createdAt: -1 }, { name: 'career_popular' }),
+    posts.createIndex({ authorUniversityId: 1, status: 1, visibility: 1, createdAt: -1 }, { name: 'university_recent' }),
     posts.createIndex({ mediaIds: 1 }, { name: 'media_ids' }),
     posts.createIndex({ status: 1, createdAt: 1 }, { name: 'pending_sweep' }),
     posts.createIndex({ hiddenAt: 1 }, { sparse: true, name: 'hidden_at' }),

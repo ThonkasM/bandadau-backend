@@ -95,8 +95,12 @@ export class MongoPostRepository implements PostRepository {
     const or: Document[] = [{ authorId: q.userId }];
     if (q.followingIds.length > 0) or.push({ authorId: { $in: [...q.followingIds] }, visibility: { $in: ['PUBLIC', 'FOLLOWERS'] } });
     if (q.groupIds.length > 0) or.push({ groupId: { $in: [...q.groupIds] }, visibility: 'GROUP' });
-    if (q.career) {
-      or.push({ visibility: 'PUBLIC', authorCareer: q.career, ...(q.universityId ? { authorUniversityId: q.universityId } : {}), createdAt: { $gte: q.popularSince } });
+    // Recomendados: posts PUBLIC recientes de mi universidad (descubrimiento en el campus, sin importar la carrera).
+    // Sin universidad en el perfil se cae a la carrera, como antes.
+    if (q.universityId) {
+      or.push({ visibility: 'PUBLIC', authorUniversityId: q.universityId, createdAt: { $gte: q.popularSince } });
+    } else if (q.career) {
+      or.push({ visibility: 'PUBLIC', authorCareer: q.career, createdAt: { $gte: q.popularSince } });
     }
     const filter: Document = { status: 'PUBLISHED', $and: [{ $or: or }, keyset(q.cursor)] };
     return (await this.posts.find(filter, this.ctx.opts).sort(SORT_DESC).limit(q.limit).toArray()).map(toPost);
