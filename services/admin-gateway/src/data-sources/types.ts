@@ -261,3 +261,19 @@ export interface InsightsAgentRunDto {
   finishedAt: string | null;
   steps?: { index: number; kind: string; toolName: string | null; input: unknown; outputSummary: string | null; isError: boolean; startedAt: string; durationMs: number }[];
 }
+
+/** `GET /internal/v1/validations` of ticketing (`ticketing-service-stats.yaml`). */
+export interface TicketValidationDto {
+  ticketId: string;
+  eventId: string;
+  eventTitle: string;
+  attendeeId: string;
+  validatedBy: string;
+  validatedAt: string;
+}
+export interface TicketValidationList {
+  from: string;
+  to: string;
+  truncated: boolean;
+  items: TicketValidationDto[];
+}

@@ -299,6 +299,30 @@ describe('serviceHealth, dashboard and walletStats', () => {
   });
 });
 
+describe('ticketValidations (attendance report)', () => {
+  it('lists who scanned whose ticket, resolves names and is ADMIN only', async () => {
+    h.mock('GET', '/ticketing/internal/v1/validations', (c) => ({
+      body: {
+        from: c.query.get('from'),
+        to: c.query.get('to'),
+        truncated: false,
+        items: [{ ticketId: ids.u3, eventId: ids.uni, eventTitle: 'Hackathon', attendeeId: ids.u1, validatedBy: ids.u2, validatedAt: '2026-11-08T22:45:00Z' }],
+      },
+    }));
+    h.mock('GET', '/identity/internal/v1/users', () => ({ body: { items: [user(ids.u1), user(ids.u2)], nextCursor: null } }));
+    for (const id of [ids.u1, ids.u2]) h.mock('GET', `/social/internal/v1/profiles/${id}`, () => ({ body: { userId: id, displayName: id === ids.u1 ? 'Jorge' : 'Julio' } }));
+    const q = '{ ticketValidations(range:{from:"2026-11-01", to:"2026-11-09"}, first: 50) { truncated items { ticketId eventTitle validatedAt attendee { id displayName } validatedBy { id displayName } } } }';
+    const res = await h.gql(q, { token: admin });
+    expect(res.body.errors).toBeUndefined();
+    expect(res.body.data.ticketValidations.items).toHaveLength(1);
+    expect(res.body.data.ticketValidations.items[0]).toMatchObject({ eventTitle: 'Hackathon', validatedAt: '2026-11-08T22:45:00.000Z' });
+    const call = h.callsTo('/ticketing')[0]!;
+    expect(call.query.get('from')).toBe('2026-11-01');
+    expect(call.query.get('limit')).toBe('50');
+    expect(code(await h.gql(q, { token: moderator }))).toBe('FORBIDDEN');
+  });
+});
+
 describe('subscriptions (graphql-ws + RabbitMQ)', () => {
   const subscribe = (token: string | undefined, query: string) =>
     new Promise<{ data?: unknown; errors?: { extensions?: { code?: string } }[] }>((resolve, reject) => {

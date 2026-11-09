@@ -30,6 +30,8 @@
 # `QUERY_TOO_DEEP`, `QUERY_TOO_COMPLEX`, `GRAPHQL_VALIDATION_FAILED`, `INTERNAL_SERVER_ERROR`.
 #
 # Changelog
+# - 1.6.0 (2026-11-09): query `ticketValidations(range, eventId, first)` (solo ADMIN) y tipos `TicketValidation`/`TicketValidationConnection`: entradas validadas en la
+#   puerta con quién la escaneó y de quién era (reporte de asistencia). Origen: `GET /internal/v1/validations` de ticketing; los nombres salen de identity.
 # - 1.5.0 (2026-10-16): motor del agente de reportes seleccionable (ADR-0022): enum `ReportEngine` (AUTO|OPENCODE|OLLAMA|STUB), argumento
 #   `engine` de `requestReport` (por defecto AUTO, compatible hacia atrás), tipo `ReportEngineInfo` y query `reportEngines` (solo ADMIN, nunca
 #   devuelve claves ni URLs con credenciales), `GeneratedReport.engine`/`model` (quién redactó) y `AgentRun.engine`/`engineMode`.
@@ -710,6 +712,25 @@ type Registration {
   updatedAt: DateTime!
 }
 
+"""Entrada validada en la puerta (UC-14): quién la escaneó y de quién era."""
+type TicketValidation {
+  ticketId: UUID!
+  eventId: UUID!
+  eventTitle: String!
+  "Dueño de la entrada (nulo si la cuenta ya no existe)."
+  attendee: User
+  "Quién escaneó la entrada: un organizador del evento o un administrador (nulo si la cuenta ya no existe)."
+  validatedBy: User
+  validatedAt: DateTime!
+}
+
+"""Lista de validaciones, de la más reciente a la más antigua."""
+type TicketValidationConnection {
+  items: [TicketValidation!]!
+  "`true` si se alcanzó el tope de tickets analizados (lista parcial)."
+  truncated: Boolean!
+}
+
 """Instancia de SAGA de inscripción o cancelación."""
 type SagaInstance {
   id: UUID!
@@ -1083,6 +1104,9 @@ type Query {
     "Máximo de elementos (1–50)."
     first: Int = 50
   ): [Registration!]! @auth(requires: [ADMIN])
+
+  """Entradas validadas en la puerta en un rango de fechas, con quién las escaneó (reporte de asistencia)."""
+  ticketValidations(range: DateRangeInput!, eventId: UUID, first: Int = 100): TicketValidationConnection! @auth(requires: [ADMIN])
 
   """SAGAs por estado (p. ej. FAILED o COMPENSATED)."""
   sagas(

@@ -3,7 +3,7 @@ import { Controller, type DynamicModule, Get, Inject, Logger, Module, type OnApp
 
 import { ServiceHttp } from './common/http-client';
 import type { GatewayConfig } from './config/env';
-import { DATA_SOURCES, type DataSources, EventsClient, IdentityClient, InsightsClient, MediaClient, SocialClient, WalletClient } from './data-sources/data-sources';
+import { DATA_SOURCES, type DataSources, EventsClient, IdentityClient, InsightsClient, MediaClient, SocialClient, TicketingClient, WalletClient } from './data-sources/data-sources';
 import { GraphqlServer } from './graphql/graphql-server';
 import { RabbitEventBus } from './graphql/pubsub/rabbit-event-bus';
 import { dashboardResolvers } from './modules/dashboard/dashboard.resolvers';
@@ -19,6 +19,8 @@ import { INSIGHTS_BINDINGS, insightsSubscriptions } from './modules/insights/ins
 import { moderationResolvers } from './modules/moderation/moderation.resolvers';
 import { ModerationService } from './modules/moderation/moderation.service';
 import { moderationSubscriptions, SUBSCRIPTION_BINDINGS } from './modules/moderation/moderation.subscriptions';
+import { ticketsResolvers } from './modules/tickets/tickets.resolvers';
+import { TicketsService } from './modules/tickets/tickets.service';
 
 const busLogger = new Logger('EventBus');
 
@@ -49,6 +51,7 @@ export function createDataSources(config: GatewayConfig, fetchImpl?: typeof fetc
     media: new MediaClient(http('media-service', config.services.media)),
     events: new EventsClient(http('events-service', config.services.events)),
     wallet: new WalletClient(http('wallet-service', config.services.wallet)),
+    ticketing: new TicketingClient(http('ticketing-service', config.services.ticketing)),
     insights: new InsightsClient(http('insights-service', config.services.insights)),
   };
 }
@@ -93,6 +96,7 @@ export class AppModule {
     const users = new UsersService(dataSources);
     const moderation = new ModerationService(dataSources);
     const events = new EventsService(dataSources);
+    const tickets = new TicketsService(dataSources);
     const dashboard = new DashboardService(dataSources, moderation);
     const insights = new InsightsService(dataSources);
     const resolvers = mergeResolvers(
@@ -100,6 +104,7 @@ export class AppModule {
       moderationResolvers(moderation),
       moderationSubscriptions(bus, moderation),
       eventsResolvers(events),
+      ticketsResolvers(tickets),
       dashboardResolvers(dashboard),
       insightsResolvers(insights),
       insightsSubscriptions(bus, insights),
