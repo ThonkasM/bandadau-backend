@@ -17,17 +17,20 @@ import { JoseQrSigner } from '../../interface-adapters/gateways/crypto/jose-qr-s
 import { DynamoOutboxPublisher } from '../../interface-adapters/gateways/dynamo/dynamo-outbox.publisher';
 import { DynamoTicketRepository } from '../../interface-adapters/gateways/dynamo/dynamo-ticket.repository';
 import { DynamoTicketStatsReader } from '../../interface-adapters/gateways/dynamo/dynamo-ticket-stats.reader';
+import { DynamoTicketValidationsReader } from '../../interface-adapters/gateways/dynamo/dynamo-ticket-validations.reader';
 import { GetSigningKeysUseCase } from '../../use-cases/get-signing-keys/get-signing-keys.use-case';
 import { GetTicketUseCase } from '../../use-cases/get-ticket/get-ticket.use-case';
 import { GetTicketStatsUseCase } from '../../use-cases/get-ticket-stats/get-ticket-stats.use-case';
 import { IssueTicketUseCase } from '../../use-cases/issue-ticket/issue-ticket.use-case';
 import { ListMyTicketsUseCase } from '../../use-cases/list-my-tickets/list-my-tickets.use-case';
+import { ListTicketValidationsUseCase } from '../../use-cases/list-ticket-validations/list-ticket-validations.use-case';
 import { CLOCK,type Clock } from '../../use-cases/ports/clock';
 import { EVENT_PUBLISHER } from '../../use-cases/ports/event-publisher';
 import { ID_GENERATOR,type IdGenerator } from '../../use-cases/ports/id-generator';
 import { type PublicSigningKey, QR_SIGNER,type QrSigner } from '../../use-cases/ports/qr-signer';
 import { TICKET_REPOSITORY,type TicketRepository } from '../../use-cases/ports/ticket.repository';
 import { TICKET_STATS_READER, type TicketStatsReader } from '../../use-cases/ports/ticket-stats.reader';
+import { TICKET_VALIDATIONS_READER, type TicketValidationsReader } from '../../use-cases/ports/ticket-validations.reader';
 import { ValidateTicketUseCase } from '../../use-cases/validate-ticket/validate-ticket.use-case';
 import { VoidTicketUseCase } from '../../use-cases/void-ticket/void-ticket.use-case';
 import type { AppConfig } from '../config/app-config';
@@ -121,6 +124,8 @@ export class AppModule {
         { provide: GetSigningKeysUseCase, useFactory: (signer: QrSigner) => new GetSigningKeysUseCase(signer), inject: [QR_SIGNER] },
         { provide: TICKET_STATS_READER, useFactory: () => new DynamoTicketStatsReader(doc, config.ticketingTable) },
         { provide: GetTicketStatsUseCase, useFactory: (reader: TicketStatsReader) => new GetTicketStatsUseCase(reader), inject: [TICKET_STATS_READER] },
+        { provide: TICKET_VALIDATIONS_READER, useFactory: () => new DynamoTicketValidationsReader(doc, config.ticketingTable) },
+        { provide: ListTicketValidationsUseCase, useFactory: (reader: TicketValidationsReader) => new ListTicketValidationsUseCase(reader), inject: [TICKET_VALIDATIONS_READER] },
         TicketingCommandsConsumer,
       ],
     };
